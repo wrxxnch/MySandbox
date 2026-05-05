@@ -38,6 +38,7 @@ export interface ElementProperties {
   category: string;
   reactions: ElementReaction[];
   isIndestructible?: boolean;
+  baseTemperature?: number; // In Kelvin
 }
 
 export interface SimulationState {

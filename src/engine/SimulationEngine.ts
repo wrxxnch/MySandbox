@@ -100,6 +100,9 @@ export class SimulationEngine {
     
     if (options.temp !== undefined) {
       this.tempGrid[index] = options.temp;
+    } else if (elIndex >= 0) {
+      const el = this.elementList[elIndex];
+      this.tempGrid[index] = el.baseTemperature !== undefined ? el.baseTemperature : 293.15;
     }
     
     if (options.ctype) {

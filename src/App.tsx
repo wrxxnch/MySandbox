@@ -866,7 +866,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
 
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-white/40">Boiling Point</label>
+                  <label className="text-[10px] uppercase font-bold text-white/40">Melting Point</label>
                   <input 
                     type="text" 
                     value={formatTemp(formData.boilingPoint || 0, tempUnit)} 
@@ -874,6 +874,18 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                     className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
                   />
                </div>
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40">Spawning Temp</label>
+                  <input 
+                    type="text" 
+                    value={formatTemp(formData.baseTemperature || 293.15, tempUnit)} 
+                    onChange={e => setFormData({...formData, baseTemperature: parseTemp(e.target.value)})} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
+                  />
+               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Freezing Point</label>
                   <input 
@@ -922,7 +934,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
 
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-white/40">Boils into</label>
+                  <label className="text-[10px] uppercase font-bold text-white/40">Melts into</label>
                   <select 
                     value={formData.vaporElementId} 
                     onChange={e => setFormData({...formData, vaporElementId: e.target.value})}
@@ -933,7 +945,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                   </select>
                </div>
                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-white/40">Freezes into</label>
+                  <label className="text-[10px] uppercase font-bold text-white/40">Congeals into</label>
                   <select 
                     value={formData.congealElementId} 
                     onChange={e => setFormData({...formData, congealElementId: e.target.value})}

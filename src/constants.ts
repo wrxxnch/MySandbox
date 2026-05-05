@@ -91,6 +91,8 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     freezingPoint: -1,
     conductivity: 0.9,
     thermalConductivity: 0.8,
+    boilingPoint: 1811, // Melting point of Iron is 1538°C (1811K)
+    vaporElementId: 'lava',
     isExplosive: false,
     category: 'metal',
     reactions: [],
@@ -180,8 +182,9 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     state: PhysicalState.SOLID,
     density: 190,
     acidity: 7,
-    boilingPoint: 3000,
+    boilingPoint: 1337, // Melting point of Gold is 1064°C (1337K)
     freezingPoint: -1,
+    vaporElementId: 'lava',
     conductivity: 1,
     thermalConductivity: 0.9,
     isExplosive: false,
@@ -195,8 +198,9 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     state: PhysicalState.SOLID,
     density: 193,
     acidity: 7,
-    boilingPoint: 6000,
+    boilingPoint: 3695, // Melting point of Tungsten is 3422°C (3695K)
     freezingPoint: -1,
+    vaporElementId: 'lava',
     conductivity: 1,
     thermalConductivity: 0.9,
     isExplosive: false,
@@ -338,6 +342,7 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     freezingPoint: 300, 
     conductivity: 0.1,
     thermalConductivity: 0.8,
+    baseTemperature: 673, // 400°C
     isExplosive: false,
     category: 'energetic',
     reactions: [],
@@ -351,9 +356,10 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     acidity: 7,
     boilingPoint: 3500,
     freezingPoint: 1200, 
-    congealElementId: 'rock',
+    congealElementId: 'stone',
     conductivity: 0.2,
     thermalConductivity: 0.6,
+    baseTemperature: 1473, // 1200°C
     isExplosive: false,
     category: 'mineral',
     reactions: [],
@@ -369,6 +375,7 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     freezingPoint: 0,
     thermalConductivity: 1,
     conductivity: 0,
+    baseTemperature: 3273, // Max tool temp
     isExplosive: false,
     category: 'special',
     reactions: [],
@@ -384,6 +391,7 @@ export const BASE_ELEMENTS: ElementProperties[] = [
     freezingPoint: 0,
     thermalConductivity: 1,
     conductivity: 0,
+    baseTemperature: 0,
     isExplosive: false,
     category: 'special',
     reactions: [],
