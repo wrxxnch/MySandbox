@@ -10,6 +10,10 @@ export class SimulationEngine {
   public nextChargeGrid: Float32Array;
   public lifeGrid: Uint8Array;
   public nextLifeGrid: Uint8Array;
+  public pressureGrid: Float32Array;
+  public nextPressureGrid: Float32Array;
+  public ctypeGrid: Uint32Array;
+  public nextCtypeGrid: Uint32Array;
   public tempGrid: Float32Array;
   public nextTempGrid: Float32Array;
   public elements: Map<string, ElementProperties> = new Map();
@@ -26,6 +30,10 @@ export class SimulationEngine {
     this.nextChargeGrid = new Float32Array(this.width * this.height);
     this.lifeGrid = new Uint8Array(this.width * this.height);
     this.nextLifeGrid = new Uint8Array(this.width * this.height);
+    this.pressureGrid = new Float32Array(this.width * this.height);
+    this.nextPressureGrid = new Float32Array(this.width * this.height);
+    this.ctypeGrid = new Uint32Array(this.width * this.height);
+    this.nextCtypeGrid = new Uint32Array(this.width * this.height);
     this.tempGrid = new Float32Array(this.width * this.height);
     this.tempGrid.fill(293); // Room temperature ~20C in Kelvin
     this.nextTempGrid = new Float32Array(this.width * this.height);
@@ -41,10 +49,13 @@ export class SimulationEngine {
     elements.forEach(el => this.elements.set(el.id, el));
   }
 
-  public setPixel(x: number, y: number, elementId: string) {
+  public setPixel(x: number, y: number, elementId: string, options: { overwrite?: boolean, temp?: number, ctype?: string } = {}) {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
     const index = y * this.width + x;
     
+    const existingIdx = this.grid[index];
+    if (options.overwrite === false && existingIdx !== 0 && elementId !== 'electricity') return;
+
     if (elementId === 'electricity') {
        const elIdx = this.grid[index];
        const el = this.elementList[elIdx];
@@ -55,22 +66,36 @@ export class SimulationEngine {
     }
 
     const elIndex = this.elementList.findIndex(e => e.id === elementId);
+    if (elIndex < 0 && elementId !== 'air') return;
+    
     this.grid[index] = elIndex >= 0 ? elIndex : 0;
     
+    if (options.temp !== undefined) {
+      this.tempGrid[index] = options.temp;
+    }
+    
+    if (options.ctype) {
+      const ctypeIdx = this.elementList.findIndex(e => e.id === options.ctype);
+      if (ctypeIdx >= 0) {
+        this.ctypeGrid[index] = ctypeIdx;
+      }
+    }
+
     // Add initial charge for dedicated sources
     if (elementId === 'positive') {
       this.lifeGrid[index] = 4;
     } else if (elementId === 'negative') {
-       // Negative could be a different type of spark in TPT, but here we'll treat it as a source too
        this.lifeGrid[index] = 4;
     }
   }
 
   public step() {
-    // Copy current state to nextGrid
+    // Copy current state to next buffers
     this.nextGrid.set(this.grid);
     this.nextTempGrid.set(this.tempGrid);
     this.nextLifeGrid.fill(0);
+    this.nextPressureGrid.fill(0); // Optional: keep some pressure or decay it
+    this.nextCtypeGrid.set(this.ctypeGrid);
 
     // 1. Spark / Electricity Propagation (TPT-like Life Cycle)
     for (let y = 0; y < this.height; y++) {
@@ -88,40 +113,43 @@ export class SimulationEngine {
            if (el && (el.id === 'positive' || el.id === 'negative')) {
               this.nextLifeGrid[idx] = 4;
            }
-
-           // Conduction at Life 3
-           if (life === 3 && el && el.conductivity > 0) {
-              const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-              for (const [dx, dy] of neighbors) {
-                const nx = x + dx;
-                const ny = y + dy;
-                if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
-                
-                const nIdx = ny * this.width + nx;
-                const nEl = this.elementList[this.grid[nIdx]];
-                // Only spark if the neighbor is conductive and has life 0
-                if (nEl && nEl.conductivity > 0 && this.lifeGrid[nIdx] === 0) {
-                   this.nextLifeGrid[nIdx] = 4;
-                }
-              }
-           }
         }
 
-        // Heat propagation (keep it simple)
-        const temp = this.tempGrid[idx];
-        if (temp !== 293) {
+        // Conduction at Life 3
+        if (life === 3 && el && el.conductivity > 0) {
            const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
            for (const [dx, dy] of neighbors) {
              const nx = x + dx;
              const ny = y + dy;
              if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+             
              const nIdx = ny * this.width + nx;
-             const tempDiff = temp - this.tempGrid[nIdx];
-             if (Math.abs(tempDiff) > 0.1) {
-                this.nextTempGrid[nIdx] += tempDiff * 0.05;
-                this.nextTempGrid[idx] -= tempDiff * 0.05;
+             const nEl = this.elementList[this.grid[nIdx]];
+             // TPT Logic: Only spark if neighbor is conductive AND life is 0
+             // Also ensure we don't spark back to a neighbor that just sparked us (nextLifeGrid check)
+             if (nEl && nEl.conductivity > 0 && this.lifeGrid[nIdx] === 0 && this.nextLifeGrid[nIdx] === 0) {
+                this.nextLifeGrid[nIdx] = 4;
              }
            }
+        }
+
+        // Heat propagation based on thermalConductivity
+        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        const selfTC = el?.thermalConductivity ?? 0.05;
+        for (const [dx, dy] of neighbors) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+          const nIdx = ny * this.width + nx;
+          const nEl = this.elementList[this.grid[nIdx]];
+          const otherTC = nEl?.thermalConductivity ?? 0.05;
+          
+          const thermalDiff = this.tempGrid[idx] - this.tempGrid[nIdx];
+          const transferRate = (selfTC + otherTC) * 0.5;
+          if (Math.abs(thermalDiff) > 0.01) {
+            this.nextTempGrid[nIdx] += thermalDiff * transferRate;
+            this.nextTempGrid[idx] -= thermalDiff * transferRate;
+          }
         }
       }
     }
@@ -152,21 +180,104 @@ export class SimulationEngine {
 
     // State Transitions
     if (element.boilingPoint > 0 && currentTemp >= element.boilingPoint && element.vaporElementId) {
-       const vaporIdx = this.elementList.findIndex(e => e.id === element.vaporElementId);
-       if (vaporIdx >= 0) {
-          this.nextGrid[idx] = vaporIdx;
+       let targetIdx = this.elementList.findIndex(e => e.id === element.vaporElementId);
+       // Use ctype if available
+       if (this.ctypeGrid[idx] !== 0) {
+         targetIdx = this.ctypeGrid[idx];
+         this.nextCtypeGrid[idx] = 0; // Reset ctype after transition
+       }
+       if (targetIdx >= 0) {
+          this.nextGrid[idx] = targetIdx;
           return;
        }
     }
     if (element.freezingPoint > 0 && currentTemp <= element.freezingPoint && element.congealElementId) {
-       const congealIdx = this.elementList.findIndex(e => e.id === element.congealElementId);
-       if (congealIdx >= 0) {
-          this.nextGrid[idx] = congealIdx;
+       let targetIdx = this.elementList.findIndex(e => e.id === element.congealElementId);
+       // Use ctype if available
+       if (this.ctypeGrid[idx] !== 0) {
+         targetIdx = this.ctypeGrid[idx];
+         this.nextCtypeGrid[idx] = 0;
+       }
+       if (targetIdx >= 0) {
+          this.nextGrid[idx] = targetIdx;
           return;
        }
     }
 
     const state = element.state;
+    const p = this.pressureGrid[idx];
+
+    // Pressure movement (Wind effect)
+    if (Math.abs(p) > 2.0 && state !== PhysicalState.SOLID) {
+        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        let maxDiff = 0;
+        let pTarget = -1;
+        for (const [dx, dy] of neighbors) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+            const nIdx = ny * this.width + nx;
+            const diff = p - this.pressureGrid[nIdx];
+            if (diff > maxDiff && this.grid[nIdx] === 0) {
+                maxDiff = diff;
+                pTarget = nIdx;
+            }
+        }
+        if (pTarget !== -1 && Math.random() < Math.abs(p) * 0.1) {
+            const tx = pTarget % this.width;
+            const ty = Math.floor(pTarget / this.width);
+            this.movePixel(x, y, tx, ty, elIdx);
+            return;
+        }
+    }
+
+    // FIRE/HEAT/COLD/WIND special logic
+    if (element.id === 'fire') {
+      this.nextPressureGrid[idx] += 2.0; // Fire creates pressure
+      if (Math.random() < 0.15) {
+        this.nextGrid[idx] = 0;
+        return;
+      }
+      this.nextTempGrid[idx] = Math.min(this.nextTempGrid[idx] + 30, 2500);
+    }
+    
+    if (element.id === 'heat') {
+        this.nextTempGrid[idx] = 3000;
+        this.nextPressureGrid[idx] += 1.0;
+    }
+    if (element.id === 'cold') {
+        this.nextTempGrid[idx] = 0;
+        this.nextPressureGrid[idx] -= 1.0;
+    }
+    if (element.id === 'wind') {
+        const nx = x + (Math.random() > 0.5 ? 1 : -1);
+        const ny = y + (Math.random() > 0.5 ? 1 : -1);
+        if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+            this.nextPressureGrid[ny * this.width + nx] += 10.0;
+        }
+        if (Math.random() < 0.1) this.nextGrid[idx] = 0;
+    }
+
+    // Combustion logic
+    if (element.flammability > 0 && currentTemp > 450) {
+        if (Math.random() < element.flammability * 0.1) {
+            const fireIdx = this.elementList.findIndex(e => e.id === 'fire');
+            if (fireIdx >= 0) {
+                this.nextGrid[idx] = fireIdx;
+                this.nextTempGrid[idx] += 100;
+                return;
+            }
+        }
+    }
+
+    // Decay logic
+    if (element.decaysIntoId && Math.random() < (element.decayChance || 0)) {
+        const targetElIdx = this.elementList.findIndex(e => e.id === element.decaysIntoId);
+        if (targetElIdx >= 0) {
+            this.nextGrid[idx] = targetElIdx;
+            return;
+        }
+    }
     
     // 3. Reactions & Acidity
     const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
@@ -256,34 +367,52 @@ export class SimulationEngine {
       return;
     }
 
-    // 3. Lateral spread (Full pressure)
-    // Scan left and right to find the nearest opening
-    const spreadRange = 5; // How far it can check per frame
-    let targetX = -1;
-    
-    for (let i = 1; i <= spreadRange; i++) {
-      const leftX = x - i;
-      const rightX = x + i;
-      
-      // We check nextGrid mainly because a spot might have been emptied this frame.
-      // But standard checking grid is safer for finding "available room"
-      const leftValid = leftX >= 0 && this.grid[y * this.width + leftX] === 0 && this.nextGrid[y * this.width + leftX] === 0;
-      const rightValid = rightX < this.width && this.grid[y * this.width + rightX] === 0 && this.nextGrid[y * this.width + rightX] === 0;
+    // 3. Lateral spread (High Fluidity) - Leveling out aggressively
+    const spreadRange = 25; 
+    let leftTarget = -1;
+    let rightTarget = -1;
 
-      if (leftValid && rightValid) {
-        targetX = Math.random() > 0.5 ? leftX : rightX;
-        break;
-      } else if (leftValid) {
-        targetX = leftX;
-        break;
-      } else if (rightValid) {
-        targetX = rightX;
-        break;
-      }
+    for (let i = 1; i <= spreadRange; i++) {
+        const lx = x - i;
+        if (lx < 0) break;
+        const targetIdx = y * this.width + lx;
+        const belowTargetIdx = (y + 1) * this.width + lx;
+
+        if (this.grid[targetIdx] === 0 && this.nextGrid[targetIdx] === 0) {
+            leftTarget = lx;
+            // Immediate priority if there is a hole below
+            if (y < this.height - 1 && this.grid[belowTargetIdx] === 0) {
+                break;
+            }
+        } else if (this.grid[targetIdx] !== 0) {
+            // Cannot pass through other particles
+            break;
+        }
     }
 
-    if (targetX !== -1) {
-      this.movePixel(x, y, targetX, y, elIdx);
+    for (let i = 1; i <= spreadRange; i++) {
+        const rx = x + i;
+        if (rx >= this.width) break;
+        const targetIdx = y * this.width + rx;
+        const belowTargetIdx = (y + 1) * this.width + rx;
+
+        if (this.grid[targetIdx] === 0 && this.nextGrid[targetIdx] === 0) {
+            rightTarget = rx;
+            if (y < this.height - 1 && this.grid[belowTargetIdx] === 0) {
+                break;
+            }
+        } else if (this.grid[targetIdx] !== 0) {
+            break;
+        }
+    }
+
+    if (leftTarget !== -1 && rightTarget !== -1) {
+        const targetX = Math.random() > 0.5 ? leftTarget : rightTarget;
+        this.movePixel(x, y, targetX, y, elIdx);
+    } else if (leftTarget !== -1) {
+        this.movePixel(x, y, leftTarget, y, elIdx);
+    } else if (rightTarget !== -1) {
+        this.movePixel(x, y, rightTarget, y, elIdx);
     }
   }
 
@@ -320,7 +449,22 @@ export class SimulationEngine {
     
     if (targetEl && targetEl.isIndestructible) return;
 
+    // Contact decay / transformation
     const currentEl = this.elementList[elIdx];
+    if (targetEl && targetEl.decaysIntoId && Math.random() < (targetEl.decayChance || 0)) {
+       const decayIdx = this.elementList.findIndex(e => e.id === targetEl.decaysIntoId);
+       if (decayIdx >= 0) {
+         this.nextGrid[newIdx] = decayIdx;
+       }
+    }
+    if (currentEl && currentEl.decaysIntoId && Math.random() < (currentEl.decayChance || 0)) {
+        const decayIdx = this.elementList.findIndex(e => e.id === currentEl.decaysIntoId);
+        if (decayIdx >= 0) {
+          this.nextGrid[oldIdx] = decayIdx;
+          // Continue move logic if it didn't just transform? 
+          // Usually transformations stop movement for that frame.
+        }
+    }
     
     if (targetIdx !== 0 && targetEl) {
        if (currentEl.density > targetEl.density) {
@@ -333,6 +477,9 @@ export class SimulationEngine {
 
           this.nextLifeGrid[oldIdx] = this.lifeGrid[newIdx];
           this.nextLifeGrid[newIdx] = this.lifeGrid[oldIdx];
+
+          this.nextCtypeGrid[oldIdx] = this.ctypeGrid[newIdx];
+          this.nextCtypeGrid[newIdx] = this.ctypeGrid[oldIdx];
        }
     } else {
        // Standard move to empty space
@@ -344,6 +491,9 @@ export class SimulationEngine {
 
        this.nextLifeGrid[newIdx] = this.lifeGrid[oldIdx];
        this.nextLifeGrid[oldIdx] = 0;
+
+       this.nextCtypeGrid[newIdx] = this.ctypeGrid[oldIdx];
+       this.nextCtypeGrid[oldIdx] = 0;
     }
   }
 
@@ -388,5 +538,29 @@ export class SimulationEngine {
     const b = parseInt(hex.slice(5, 7), 16);
     // ABGR format for little-endian Uint32Array
     return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+
+  public getSnapshot() {
+    return {
+      grid: new Uint32Array(this.grid),
+      tempGrid: new Float32Array(this.tempGrid),
+      pressureGrid: new Float32Array(this.pressureGrid),
+      lifeGrid: new Uint8Array(this.lifeGrid),
+      ctypeGrid: new Uint32Array(this.ctypeGrid)
+    };
+  }
+
+  public restoreSnapshot(snapshot: any) {
+    if (!snapshot) return;
+    this.grid.set(snapshot.grid);
+    this.tempGrid.set(snapshot.tempGrid);
+    this.pressureGrid.set(snapshot.pressureGrid);
+    this.lifeGrid.set(snapshot.lifeGrid);
+    this.ctypeGrid.set(snapshot.ctypeGrid);
+    this.nextGrid.set(this.grid);
+    this.nextTempGrid.set(this.tempGrid);
+    this.nextPressureGrid.set(this.pressureGrid);
+    this.nextLifeGrid.set(this.lifeGrid);
+    this.nextCtypeGrid.set(this.ctypeGrid);
   }
 }

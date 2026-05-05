@@ -26,7 +26,13 @@ export interface ElementProperties {
   freezingPoint: number; // In Kelvin
   vaporElementId?: string; // What it turns into when boiling
   congealElementId?: string; // What it turns into when freezing
-  conductivity: number; // 0 to 1
+  conductivity: number; // Electrical 0 to 1
+  thermalConductivity: number; // Heat 0 to 1
+  flammability?: number;
+  fuel?: number;
+  burnSpeed?: number;
+  decaysIntoId?: string;
+  decayChance?: number;
   isExplosive: boolean;
   explosiveTrigger?: 'contact' | 'temp' | 'electricity';
   category: string;
@@ -39,6 +45,8 @@ export interface SimulationState {
   tempGrid: Float32Array; // Temperature for each pixel
   chargeGrid: Float32Array; // Electricity for each pixel (unused/legacy)
   lifeGrid: Uint8Array; // Electrical life state (0-4)
+  pressureGrid: Float32Array;
+  ctypeGrid: Uint32Array; // Custom type storage for each pixel
   width: number;
   height: number;
 }
