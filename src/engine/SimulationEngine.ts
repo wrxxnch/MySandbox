@@ -163,20 +163,30 @@ export class SimulationEngine {
 
         // Heat propagation based on thermalConductivity
         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-        const selfTC = el?.thermalConductivity ?? 0.05;
+        const selfTC = el?.thermalConductivity ?? 0.02; // Air and tools have lower TC
+        
+        // Dissipation to environment (Ambient return)
+        const ROOM_TEMP = 293.15;
+        const dissipationRate = 0.005; // Global cooling/warming factor to return to normal
+        this.nextTempGrid[idx] += (ROOM_TEMP - this.tempGrid[idx]) * dissipationRate;
+
         for (const [dx, dy] of neighbors) {
           const nx = x + dx;
           const ny = y + dy;
           if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
           const nIdx = ny * this.width + nx;
           const nEl = this.elementList[this.grid[nIdx]];
-          const otherTC = nEl?.thermalConductivity ?? 0.05;
+          const otherTC = nEl?.thermalConductivity ?? 0.02;
           
           const thermalDiff = this.tempGrid[idx] - this.tempGrid[nIdx];
-          const transferRate = (selfTC + otherTC) * 0.5;
+          // Heat conduction formula: rate * difference
+          // Divided by 4 because we check 4 neighbors
+          const transferRate = (selfTC + otherTC) * 0.125; 
+          
           if (Math.abs(thermalDiff) > 0.01) {
-            this.nextTempGrid[nIdx] += thermalDiff * transferRate;
             this.nextTempGrid[idx] -= thermalDiff * transferRate;
+            // Note: we don't update nIdx here to avoid double-counting in this single-pass loop
+            // Symmetric update happens when nx, ny becomes the current x,y
           }
         }
       }
