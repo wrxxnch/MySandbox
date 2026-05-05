@@ -283,8 +283,10 @@ export default function App() {
   const handlePointer = (e: React.PointerEvent) => {
     if (!canvasRef.current || !engineRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - rect.left) / rect.width) * GRID_WIDTH);
-    const y = Math.floor(((e.clientY - rect.top) / rect.height) * GRID_HEIGHT);
+    const scaleX = rect.width / GRID_WIDTH;
+    const scaleY = rect.height / GRID_HEIGHT;
+    const x = Math.floor((e.clientX - rect.left) / scaleX);
+    const y = Math.floor((e.clientY - rect.top) / scaleY);
 
     if (isPainting.current || e.type === 'pointerdown') {
       if (e.type === 'pointerdown') {
@@ -566,7 +568,7 @@ export default function App() {
             className="relative shadow-2xl shadow-black/50 border border-white/5 rounded-sm overflow-hidden"
             style={{
               transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
-              transition: isPanning ? 'none' : 'transform 0.1s ease-out'
+              transition: (isPanning || isPainting.current) ? 'none' : 'transform 0.1s ease-out'
             }}
           >
              <canvas

@@ -54,25 +54,32 @@ export class SimulationEngine {
     const index = y * this.width + x;
     
     const existingIdx = this.grid[index];
-    if (options.overwrite === false && existingIdx !== 0 && elementId !== 'electricity') return;
+    const isTool = ['heat', 'cold', 'wind', 'prop', 'electricity'].includes(elementId);
+    if (options.overwrite === false && existingIdx !== 0 && !isTool) return;
 
     if (elementId === 'heat') {
-       this.tempGrid[index] = Math.min(this.tempGrid[index] + 100, 3273); // Max ~3000C
+       if (existingIdx !== 0) {
+         this.tempGrid[index] = Math.min(this.tempGrid[index] + 150, 3500); 
+       }
        return;
     }
     if (elementId === 'cold') {
-       this.tempGrid[index] = Math.max(this.tempGrid[index] - 100, 0);
+       if (existingIdx !== 0) {
+         this.tempGrid[index] = Math.max(this.tempGrid[index] - 150, 0);
+       }
        return;
     }
     if (elementId === 'wind') {
-       this.pressureGrid[index] += 10.0;
+       this.pressureGrid[index] += 15.0;
        return;
     }
     if (elementId === 'prop') {
-       if (options.temp !== undefined) this.tempGrid[index] = options.temp;
-       if (options.ctype) {
-         const ctypeIdx = this.elementList.findIndex(e => e.id === options.ctype);
-         if (ctypeIdx >= 0) this.ctypeGrid[index] = ctypeIdx;
+       if (existingIdx !== 0) {
+         if (options.temp !== undefined) this.tempGrid[index] = options.temp;
+         if (options.ctype) {
+           const ctypeIdx = this.elementList.findIndex(e => e.id === options.ctype);
+           if (ctypeIdx >= 0) this.ctypeGrid[index] = ctypeIdx;
+         }
        }
        return;
     }
@@ -510,17 +517,61 @@ export class SimulationEngine {
         const elIdx = this.grid[i];
         const color = this.elementList[elIdx].color;
         const life = this.lifeGrid[i];
+        const temp = this.tempGrid[i];
         
         let finalColor = color;
+        
+        // 1. Temperature-based color shifts
+        if (temp < 273.15) {
+           // Cold: Shift towards blue
+           const intensity = Math.min((273.15 - temp) / 273.15, 0.5);
+           finalColor = this.lerpColor(finalColor, '#0066FF', intensity);
+        } else if (temp > 350 && temp <= 800) {
+           // Warm: Shift towards red (not yet glowing)
+           const intensity = Math.min((temp - 350) / 450, 0.4);
+           finalColor = this.lerpColor(finalColor, '#FF3300', intensity);
+        } else if (temp > 800) {
+           // Glowing hot
+           const glowColor = this.getGlowColor(temp);
+           const intensity = Math.min((temp - 800) / 1500, 1.0);
+           finalColor = this.lerpColor(finalColor, glowColor, intensity);
+        }
+
+        // 2. Spark overlay
         if (life > 0) {
           // Sparks are bright yellow-white
           const sparkColor = '#FFFFCC';
-          finalColor = this.lerpColor(color, sparkColor, life / 4);
+          finalColor = this.lerpColor(finalColor, sparkColor, life / 4);
         }
 
         this.buffer[i] = this.hexToUint32(finalColor);
     }
     ctx.putImageData(this.imageData, 0, 0);
+  }
+
+  private getGlowColor(tempK: number): string {
+    // Simplified Planckian locus approximation
+    if (tempK < 800) return '#000000';
+    
+    // Very hot: shift from deep red to bright white
+    if (tempK < 1500) {
+      // Reddish
+      const r = 255;
+      const g = Math.floor((tempK - 800) / 700 * 100);
+      return `#${(r << 16 | g << 8 | 0).toString(16).padStart(6, '0')}`;
+    } else if (tempK < 2500) {
+      // Orange to yellow
+      const r = 255;
+      const g = 100 + Math.floor((tempK - 1500) / 1000 * 155);
+      const b = Math.floor((tempK - 1500) / 1000 * 100);
+      return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
+    } else {
+      // Yellow to white
+      const r = 255;
+      const g = 255;
+      const b = 100 + Math.min(Math.floor((tempK - 2500) / 1000 * 155), 155);
+      return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
+    }
   }
 
   private lerpColor(a: string, b: string, amount: number): string {
