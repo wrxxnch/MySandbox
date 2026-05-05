@@ -19,17 +19,26 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    // Allow test connection
+    match /test/connection {
+      allow read: if true;
+    }
+
     // Custom Elements
     match /user_elements/{elementId} {
       function isValidElement(data) {
-        return data.name is string && data.name.size() <= 64 &&
+        return data.keys().hasAll(['name', 'id', 'color', 'userId']) &&
+               data.name is string && data.name.size() <= 64 &&
+               data.id is string && data.id.size() <= 64 &&
                data.color is string && data.color.matches('^#[0-9a-fA-F]{6}$') &&
                data.userId == request.auth.uid;
       }
 
-      allow read: if true; // Publicly readable for sharing
-      allow create: if isSignedIn() && isValidElement(request.resource.data);
-      allow update, delete: if isOwner(resource.data.userId);
+      allow get: if true;
+      allow list: if true; // Public list allowed, or restrict if desired
+      allow create: if isSignedIn() && isValidElement(request.resource.data) && isValidId(elementId);
+      allow update: if isOwner(resource.data.userId) && isValidElement(request.resource.data);
+      allow delete: if isOwner(resource.data.userId);
     }
     
     // Maps

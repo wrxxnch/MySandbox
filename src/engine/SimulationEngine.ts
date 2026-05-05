@@ -56,6 +56,27 @@ export class SimulationEngine {
     const existingIdx = this.grid[index];
     if (options.overwrite === false && existingIdx !== 0 && elementId !== 'electricity') return;
 
+    if (elementId === 'heat') {
+       this.tempGrid[index] = Math.min(this.tempGrid[index] + 100, 3273); // Max ~3000C
+       return;
+    }
+    if (elementId === 'cold') {
+       this.tempGrid[index] = Math.max(this.tempGrid[index] - 100, 0);
+       return;
+    }
+    if (elementId === 'wind') {
+       this.pressureGrid[index] += 10.0;
+       return;
+    }
+    if (elementId === 'prop') {
+       if (options.temp !== undefined) this.tempGrid[index] = options.temp;
+       if (options.ctype) {
+         const ctypeIdx = this.elementList.findIndex(e => e.id === options.ctype);
+         if (ctypeIdx >= 0) this.ctypeGrid[index] = ctypeIdx;
+       }
+       return;
+    }
+
     if (elementId === 'electricity') {
        const elIdx = this.grid[index];
        const el = this.elementList[elIdx];
@@ -231,7 +252,7 @@ export class SimulationEngine {
         }
     }
 
-    // FIRE/HEAT/COLD/WIND special logic
+    // FIRE special logic
     if (element.id === 'fire') {
       this.nextPressureGrid[idx] += 2.0; // Fire creates pressure
       if (Math.random() < 0.15) {
@@ -241,23 +262,6 @@ export class SimulationEngine {
       this.nextTempGrid[idx] = Math.min(this.nextTempGrid[idx] + 30, 2500);
     }
     
-    if (element.id === 'heat') {
-        this.nextTempGrid[idx] = 3000;
-        this.nextPressureGrid[idx] += 1.0;
-    }
-    if (element.id === 'cold') {
-        this.nextTempGrid[idx] = 0;
-        this.nextPressureGrid[idx] -= 1.0;
-    }
-    if (element.id === 'wind') {
-        const nx = x + (Math.random() > 0.5 ? 1 : -1);
-        const ny = y + (Math.random() > 0.5 ? 1 : -1);
-        if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
-            this.nextPressureGrid[ny * this.width + nx] += 10.0;
-        }
-        if (Math.random() < 0.1) this.nextGrid[idx] = 0;
-    }
-
     // Combustion logic
     if (element.flammability > 0 && currentTemp > 450) {
         if (Math.random() < element.flammability * 0.1) {
