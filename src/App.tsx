@@ -92,7 +92,7 @@ export default function App() {
   const [hoverData, setHoverData] = useState<any>(null);
   const [tempUnit, setTempUnit] = useState<'K' | 'C' | 'F'>('C');
   const [searchQuery, setSearchQuery] = useState('');
-  const [brushOverwrite, setBrushOverwrite] = useState(true);
+  const [brushOverwrite, setBrushOverwrite] = useState(false);
   const [brushTemp, setBrushTemp] = useState<string>('293'); // Default room temp
   const [brushCtype, setBrushCtype] = useState<string>('empty');
   const [viewTransform, setViewTransform] = useState({ scale: 1, x: 0, y: 0 });
@@ -305,13 +305,7 @@ export default function App() {
       }
 
       isPainting.current = true;
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const x = Math.floor(((e.clientX - rect.left) / rect.width) * (GRID_WIDTH / viewTransform.scale));
-      const y = Math.floor(((e.clientY - rect.top) / rect.height) * (GRID_HEIGHT / viewTransform.scale));
       
-      // Note: This logic for x/y needs correction if we shifted the view. 
-      // For now let's keep it simple or implement viewport offset.
-
       for (let i = -brushSize; i <= brushSize; i++) {
         for (let j = -brushSize; j <= brushSize; j++) {
            if (i*i + j*j <= brushSize*brushSize) {
