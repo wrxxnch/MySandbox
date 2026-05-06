@@ -1,4 +1,4 @@
-import { GRID_WIDTH, GRID_HEIGHT, ElementProperties, PhysicalState } from '../types';
+import { GRID_WIDTH, GRID_HEIGHT, ElementProperties, PhysicalState, Particle } from '../types';
 import { BASE_ELEMENTS } from '../constants';
 
 export class SimulationEngine {
@@ -20,8 +20,14 @@ export class SimulationEngine {
   public elementList: ElementProperties[] = [];
   
   // Buffers for visualization
-  private imageData: ImageData;
+  public imageData: ImageData;
   private buffer: Uint32Array;
+
+  public particles: Particle[] = [];
+  private forceMatrix: number[][] = [];
+  public particleColors = ['#f87171', '#4ade80', '#60a5fa', '#fbbf24', '#a78bfa', '#22d3ee'];
+  private friction = 0.95;
+  private interactionRadius = 80;
 
   constructor() {
     this.grid = new Uint32Array(this.width * this.height);
@@ -40,7 +46,56 @@ export class SimulationEngine {
     this.imageData = new ImageData(this.width, this.height);
     this.buffer = new Uint32Array(this.imageData.data.buffer);
     
+    this.randomizeParticleForces(Math.random().toString());
     this.loadElements(BASE_ELEMENTS);
+  }
+
+  public randomizeParticleForces(seed: string) {
+    const seededRandom = (s: string) => {
+      let x = 0;
+      for (let i = 0; i < s.length; i++) x = (x << 5) - x + s.charCodeAt(i);
+      return () => {
+        x = Math.sin(x++) * 10000;
+        return x - Math.floor(x);
+      };
+    };
+    const rng = seededRandom(seed);
+    this.forceMatrix = [];
+    for (let i = 0; i < this.particleColors.length; i++) {
+        const row = [];
+        for (let j = 0; j < this.particleColors.length; j++) {
+            row.push(rng() * 2 - 1);
+        }
+        this.forceMatrix.push(row);
+    }
+  }
+
+  public setFriction(f: number) { this.friction = f; }
+  public setInteractionRadius(r: number) { this.interactionRadius = r; }
+
+  public getSnapshot() {
+    return {
+      grid: new Uint32Array(this.grid),
+      tempGrid: new Float32Array(this.tempGrid),
+      lifeGrid: new Uint8Array(this.lifeGrid),
+      pressureGrid: new Float32Array(this.pressureGrid),
+      ctypeGrid: new Uint32Array(this.ctypeGrid),
+      particles: JSON.parse(JSON.stringify(this.particles))
+    };
+  }
+
+  public restoreSnapshot(snapshot: any) {
+    this.grid.set(snapshot.grid);
+    this.tempGrid.set(snapshot.tempGrid);
+    this.lifeGrid.set(snapshot.lifeGrid);
+    this.pressureGrid.set(snapshot.pressureGrid);
+    this.ctypeGrid.set(snapshot.ctypeGrid);
+    this.particles = snapshot.particles || [];
+    this.nextGrid.set(this.grid);
+    this.nextTempGrid.set(this.tempGrid);
+    this.nextLifeGrid.set(this.lifeGrid);
+    this.nextPressureGrid.set(this.pressureGrid);
+    this.nextCtypeGrid.set(this.ctypeGrid);
   }
 
   public clear() {
@@ -56,6 +111,7 @@ export class SimulationEngine {
     this.nextCtypeGrid.fill(0);
     this.tempGrid.fill(293.15);
     this.nextTempGrid.fill(293.15);
+    this.particles = [];
   }
 
   public loadElements(elements: ElementProperties[]) {
@@ -64,12 +120,12 @@ export class SimulationEngine {
     elements.forEach(el => this.elements.set(el.id, el));
   }
 
-  public setPixel(x: number, y: number, elementId: string, options: { overwrite?: boolean, temp?: number, ctype?: string } = {}) {
+  public setPixel(x: number, y: number, elementId: string, options: { overwrite?: boolean, temp?: number, ctype?: string, ctypeIdNum?: number } = {}) {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
     const index = y * this.width + x;
     
     const existingIdx = this.grid[index];
-    const isTool = ['heat', 'cold', 'wind', 'prop', 'electricity'].includes(elementId);
+    const isTool = ['heat', 'cold', 'wind', 'vccm', 'prop', 'electricity', 'sprk'].includes(elementId);
     if (options.overwrite === false && existingIdx !== 0 && !isTool) return;
 
     if (elementId === 'heat') {
@@ -88,6 +144,10 @@ export class SimulationEngine {
        this.pressureGrid[index] += 15.0;
        return;
     }
+    if (elementId === 'vccm') {
+       this.pressureGrid[index] -= 15.0;
+       return;
+    }
     if (elementId === 'prop') {
        if (existingIdx !== 0) {
          if (options.temp !== undefined) this.tempGrid[index] = options.temp;
@@ -99,11 +159,19 @@ export class SimulationEngine {
        return;
     }
 
-    if (elementId === 'electricity') {
+    if (elementId === 'electricity' || elementId === 'sprk') {
        const elIdx = this.grid[index];
        const el = this.elementList[elIdx];
        if (el && el.conductivity > 0) {
          this.lifeGrid[index] = 4;
+       } else if (elementId === 'sprk' && elIdx === 0) {
+         // Allow placing spark in air too, but as a temporary pixel (since it has decay)
+         const sprkIdx = this.elementList.findIndex(e => e.id === 'sprk');
+         if (sprkIdx >= 0) {
+            this.grid[index] = sprkIdx;
+            this.lifeGrid[index] = 4;
+            this.tempGrid[index] = 293.15;
+         }
        }
        return;
     }
@@ -125,12 +193,16 @@ export class SimulationEngine {
       if (ctypeIdx >= 0) {
         this.ctypeGrid[index] = ctypeIdx;
       }
+    } else if (options.ctypeIdNum !== undefined) {
+      this.ctypeGrid[index] = Math.floor(options.ctypeIdNum);
     }
 
     // Add initial charge for dedicated sources
     const el = elIndex >= 0 ? this.elementList[elIndex] : null;
     if ((el && el.isSource) || elementId === 'sprk') {
       this.lifeGrid[index] = 4;
+    } else if (elementId === 'fire') {
+      this.lifeGrid[index] = 80 + Math.floor(Math.random() * 40); // Initial fire life
     }
   }
 
@@ -175,32 +247,49 @@ export class SimulationEngine {
            }
         }
 
+        // Pressure Diffusion (Simplified)
+        let pAvg = this.pressureGrid[idx];
+        const pNeighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dx, dy] of pNeighbors) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+            pAvg += this.pressureGrid[ny * this.width + nx];
+          }
+        }
+        this.nextPressureGrid[idx] = (pAvg / 5) * 0.98; // Smooth and decay
+
         // Heat propagation based on thermalConductivity
         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
         const selfTC = el?.thermalConductivity ?? 0.02; // Air and tools have lower TC
         
         // Dissipation to environment (Ambient return)
-        const ROOM_TEMP = 293.15;
-        const dissipationRate = 0.005; // Global cooling/warming factor to return to normal
-        this.nextTempGrid[idx] += (ROOM_TEMP - this.tempGrid[idx]) * dissipationRate;
+        // Sensors don't lose temp to environment
+        if (el && el.category !== 'sensors') {
+          const ROOM_TEMP = 293.15;
+          const dissipationRate = 0.005; // Global cooling/warming factor to return to normal
+          this.nextTempGrid[idx] += (ROOM_TEMP - this.tempGrid[idx]) * dissipationRate;
+        }
 
-        for (const [dx, dy] of neighbors) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
-          const nIdx = ny * this.width + nx;
-          const nEl = this.elementList[this.grid[nIdx]];
-          const otherTC = nEl?.thermalConductivity ?? 0.02;
-          
-          const thermalDiff = this.tempGrid[idx] - this.tempGrid[nIdx];
-          // Heat conduction formula: rate * difference
-          // Divided by 4 because we check 4 neighbors
-          const transferRate = (selfTC + otherTC) * 0.125; 
-          
-          if (Math.abs(thermalDiff) > 0.01) {
-            this.nextTempGrid[idx] -= thermalDiff * transferRate;
-            // Note: we don't update nIdx here to avoid double-counting in this single-pass loop
-            // Symmetric update happens when nx, ny becomes the current x,y
+        if (selfTC > 0) {
+          for (const [dx, dy] of neighbors) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+            const nIdx = ny * this.width + nx;
+            const nEl = this.elementList[this.grid[nIdx]];
+            const otherTC = nEl?.thermalConductivity ?? 0.02;
+            
+            if (otherTC > 0) {
+              const thermalDiff = this.tempGrid[idx] - this.tempGrid[nIdx];
+              // Heat conduction formula: rate * difference
+              // Divided by 4 because we check 4 neighbors
+              const transferRate = (selfTC + otherTC) * 0.125; 
+              
+              if (Math.abs(thermalDiff) > 0.01) {
+                this.nextTempGrid[idx] -= thermalDiff * transferRate;
+              }
+            }
           }
         }
       }
@@ -220,6 +309,63 @@ export class SimulationEngine {
 
     // Swap all grids
     this.swapBuffers();
+
+    // 3. Particle Life update
+    this.updateParticles();
+  }
+
+  private updateParticles() {
+    for (let i = 0; i < this.particles.length; i++) {
+        let fx = 0;
+        let fy = 0;
+        const a = this.particles[i];
+
+        for (let j = 0; j < this.particles.length; j++) {
+            if (i === j) continue;
+            const b = this.particles[j];
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+
+            if (d > 0 && d < this.interactionRadius) {
+                const f = this.forceMatrix[a.type][b.type];
+                // Distance-based force logic
+                // Simple version: attraction/repulsion
+                // Normalized force
+                const force = (1 / d) * f;
+                fx += force * dx;
+                fy += force * dy;
+
+                // Repulsion at very close range
+                if (d < 10) {
+                   const rForce = (10 - d) * 0.5;
+                   fx += (dx/d) * rForce;
+                   fy += (dy/d) * rForce;
+                }
+            }
+        }
+
+        a.vx = (a.vx + fx) * this.friction;
+        a.vy = (a.vy + fy) * this.friction;
+        a.x += a.vx;
+        a.y += a.vy;
+
+        // Bounce/Wrap boundaries
+        if (a.x <= 0 || a.x >= this.width) a.vx *= -1;
+        if (a.y <= 0 || a.y >= this.height) a.vy *= -1;
+        a.x = Math.max(0, Math.min(this.width, a.x));
+        a.y = Math.max(0, Math.min(this.height, a.y));
+    }
+  }
+
+  public spawnParticle(x: number, y: number, type: number) {
+    if (this.particles.length > 3000) return; // Cap for performance
+    this.particles.push({
+        x, y,
+        vx: 0, vy: 0,
+        type: type % this.particleColors.length,
+        color: this.particleColors[type % this.particleColors.length]
+    });
   }
 
   private swapBuffers() {
@@ -265,7 +411,7 @@ export class SimulationEngine {
     const p = this.pressureGrid[idx];
 
     // Pressure movement (Wind effect)
-    if (Math.abs(p) > 2.0 && state !== PhysicalState.SOLID) {
+    if (Math.abs(p) > 1.0 && state !== PhysicalState.SOLID) {
         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
         let maxDiff = 0;
         let pTarget = -1;
@@ -275,7 +421,7 @@ export class SimulationEngine {
             if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
             const nIdx = ny * this.width + nx;
             const diff = p - this.pressureGrid[nIdx];
-            if (diff > maxDiff && this.grid[nIdx] === 0) {
+            if (Math.abs(diff) > Math.abs(maxDiff) && this.grid[nIdx] === 0) {
                 maxDiff = diff;
                 pTarget = nIdx;
             }
@@ -288,14 +434,75 @@ export class SimulationEngine {
         }
     }
 
+    // CLONE logic
+    if (element.id === 'clne') {
+      let ctype = this.ctypeGrid[idx];
+      if (ctype === 0) {
+        // Learn from neighbors
+        const nbs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dx, dy] of nbs) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+            const nIdx = ny * this.width + nx;
+            const nElIdx = this.grid[nIdx];
+            if (nElIdx !== 0 && this.elementList[nElIdx].id !== 'clne') {
+              this.nextCtypeGrid[idx] = nElIdx;
+              ctype = nElIdx;
+              break;
+            }
+          }
+        }
+      }
+
+      if (ctype !== 0) {
+        const nbs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dx, dy] of nbs) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+            const nIdx = ny * this.width + nx;
+            if (this.grid[nIdx] === 0 && this.nextGrid[nIdx] === 0) {
+              this.nextGrid[nIdx] = ctype;
+              this.nextTempGrid[nIdx] = this.tempGrid[idx];
+            }
+          }
+        }
+      }
+      return; // Clone is static otherwise
+    }
+
     // FIRE special logic
     if (element.id === 'fire') {
       this.nextPressureGrid[idx] += 2.0; // Fire creates pressure
-      if (Math.random() < 0.15) {
-        this.nextGrid[idx] = 0;
+      
+      const fireLife = this.lifeGrid[idx];
+      if (fireLife > 0) {
+        this.nextLifeGrid[idx] = fireLife - 1;
+      }
+
+      if (fireLife <= 1) {
+        const smkeIdx = this.elementList.findIndex(e => e.id === 'smke');
+        if (smkeIdx >= 0) {
+          this.nextGrid[idx] = smkeIdx;
+          this.nextLifeGrid[idx] = 0;
+        } else {
+          this.nextGrid[idx] = 0;
+        }
         return;
       }
       this.nextTempGrid[idx] = Math.min(this.nextTempGrid[idx] + 30, 2500);
+    }
+    
+    // Sensor detection (Linking Temp to Pressure & Energy)
+    if (element.category === 'sensors') {
+       const psi = (currentTemp - 273.15); // C to PSI mapping as requested
+       this.nextPressureGrid[idx] = psi;
+       
+       const thresholdK = this.ctypeGrid[idx];
+       if (thresholdK > 0 && currentTemp >= thresholdK) {
+          this.nextLifeGrid[idx] = 4; // Generate Energy
+       }
     }
     
     // Combustion logic
@@ -304,6 +511,7 @@ export class SimulationEngine {
             const fireIdx = this.elementList.findIndex(e => e.id === 'fire');
             if (fireIdx >= 0) {
                 this.nextGrid[idx] = fireIdx;
+                this.nextLifeGrid[idx] = 80 + Math.floor(Math.random() * 40);
                 this.nextTempGrid[idx] += 100;
                 return;
             }
@@ -333,7 +541,10 @@ export class SimulationEngine {
         // Custom Reactions
         if (element.reactions) {
            for (const reaction of element.reactions) {
-              if (reaction.targetElementId === nEl.id) {
+              const isMatch = (reaction.targetElementId === nEl.id);
+              const finalMatch = reaction.isExclude ? !isMatch : isMatch;
+
+              if (finalMatch) {
                  if (Math.random() < reaction.chance) {
                     const transIdx = this.elementList.findIndex(e => e.id === reaction.transformIntoId);
                     if (transIdx >= 0) this.nextGrid[idx] = transIdx;
@@ -503,36 +714,7 @@ export class SimulationEngine {
       this.nextGrid[oldIdx] = 0; // Destroy the element trying to move in
       return;
     }
-    if (currentEl && (currentEl.id === 'void' || currentEl.id === 'absorb_wall')) {
-       // Void itself doesn't move easily if SOLID, but if anything swaps with it, it should vanish
-       // The handle logics usually manage this.
-    }
-
-    // --- Special Element Logic: CLONE ---
-    if (targetEl && targetEl.id === 'clne') {
-       // If clone touches something, set ctype
-       if (currentEl.id !== 'empty' && currentEl.id !== 'clne') {
-         this.nextCtypeGrid[newIdx] = elIdx;
-       }
-       // If clone has a ctype, spawn it
-       const ctype = this.ctypeGrid[newIdx];
-       if (ctype !== 0) {
-         // Spawn neighbors
-         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-         for (const [dx, dy] of neighbors) {
-           const nx = newX + dx;
-           const ny = newY + dy;
-           if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
-             const nIdx = ny * this.width + nx;
-             if (this.grid[nIdx] === 0) {
-               this.nextGrid[nIdx] = ctype;
-             }
-           }
-         }
-       }
-       return; // Clone doesn't move and doesn't get swapped
-    }
-
+    
     if (targetEl && targetEl.isIndestructible) return;
 
     // Contact decay / transformation
@@ -590,14 +772,30 @@ export class SimulationEngine {
   public render(ctx: CanvasRenderingContext2D) {
     for (let i = 0; i < this.grid.length; i++) {
         const elIdx = this.grid[i];
-        const color = this.elementList[elIdx].color;
+        const element = this.elementList[elIdx];
+        const color = element.color;
         const life = this.lifeGrid[i];
         const temp = this.tempGrid[i];
         
         let finalColor = color;
         
-        // 1. Temperature-based color shifts (Skip for Air)
-        if (elIdx !== 0) {
+        // Fire custom color gradient
+        if (element.id === 'fire') {
+          // Gradient based on current life (starts ~100)
+          if (life > 80) {
+            finalColor = '#FFFF00'; // Yellow
+          } else if (life > 40) {
+            finalColor = '#FF8800'; // Orange
+          } else {
+            finalColor = '#FF4500'; // Red
+          }
+          
+          // Flicker
+          if (Math.random() > 0.8) {
+            finalColor = this.lerpColor(finalColor, '#FFFFFF', 0.3);
+          }
+        } else if (elIdx !== 0) {
+            // 1. Temperature-based color shifts (Skip for Air)
             if (temp < 273.15) {
                // Cold: Shift towards blue
                const intensity = Math.min((273.15 - temp) / 273.15, 0.5);
@@ -615,7 +813,7 @@ export class SimulationEngine {
         }
 
         // 2. Spark overlay
-        if (life > 0) {
+        if (life > 0 && element.id !== 'fire') {
           // Sparks are bright yellow-white
           const sparkColor = '#FFFFCC';
           finalColor = this.lerpColor(finalColor, sparkColor, life / 4);
@@ -623,7 +821,24 @@ export class SimulationEngine {
 
         this.buffer[i] = this.hexToUint32(finalColor);
     }
+    
+    // Render Particles
+    for (const p of this.particles) {
+        const px = Math.floor(p.x);
+        const py = Math.floor(p.y);
+        if (px >= 0 && px < this.width && py >= 0 && py < this.height) {
+            this.buffer[py * this.width + px] = this.hexToABGR(p.color);
+        }
+    }
+
     ctx.putImageData(this.imageData, 0, 0);
+  }
+
+  private hexToABGR(hex: string): number {
+    const r = parseInt(hex.substring(1, 3), 16);
+    const g = parseInt(hex.substring(3, 5), 16);
+    const b = parseInt(hex.substring(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
   }
 
   private getGlowColor(tempK: number): string {
@@ -670,29 +885,5 @@ export class SimulationEngine {
     const b = parseInt(hex.slice(5, 7), 16);
     // ABGR format for little-endian Uint32Array
     return (255 << 24) | (b << 16) | (g << 8) | r;
-  }
-
-  public getSnapshot() {
-    return {
-      grid: new Uint32Array(this.grid),
-      tempGrid: new Float32Array(this.tempGrid),
-      pressureGrid: new Float32Array(this.pressureGrid),
-      lifeGrid: new Uint8Array(this.lifeGrid),
-      ctypeGrid: new Uint32Array(this.ctypeGrid)
-    };
-  }
-
-  public restoreSnapshot(snapshot: any) {
-    if (!snapshot) return;
-    this.grid.set(snapshot.grid);
-    this.tempGrid.set(snapshot.tempGrid);
-    this.pressureGrid.set(snapshot.pressureGrid);
-    this.lifeGrid.set(snapshot.lifeGrid);
-    this.ctypeGrid.set(snapshot.ctypeGrid);
-    this.nextGrid.set(this.grid);
-    this.nextTempGrid.set(this.tempGrid);
-    this.nextPressureGrid.set(this.pressureGrid);
-    this.nextLifeGrid.set(this.lifeGrid);
-    this.nextCtypeGrid.set(this.ctypeGrid);
   }
 }

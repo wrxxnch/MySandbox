@@ -7,6 +7,7 @@ export enum PhysicalState {
 
 export interface ElementReaction {
   targetElementId: string; // The element it touches
+  isExclude?: boolean; // If true, matches any element EXCEPT this targetID
   chance: number; // 0 to 1
   transformIntoId: string; // What the current element becomes
   producesElementId?: string; // What the target element becomes (optional)
@@ -40,6 +41,16 @@ export interface ElementProperties {
   reactions: ElementReaction[];
   isIndestructible?: boolean;
   baseTemperature?: number; // In Kelvin
+  isParticleLife?: boolean; // If this element handles particle life logic
+}
+
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  type: number; // Color index
+  color: string;
 }
 
 export interface SimulationState {
@@ -49,6 +60,7 @@ export interface SimulationState {
   lifeGrid: Uint8Array; // Electrical life state (0-4)
   pressureGrid: Float32Array;
   ctypeGrid: Uint32Array; // Custom type storage for each pixel
+  particles: Particle[];
   width: number;
   height: number;
 }

@@ -174,6 +174,10 @@ export default function App() {
   const [history, setHistory] = useState<any[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [detectionThreshold, setDetectionThreshold] = useState<number>(300); // 300C
+  const [particleSeed, setParticleSeed] = useState<string>("pixelforge");
+  const [particleFriction, setParticleFriction] = useState<number>(0.95);
+  const [particleRadius, setParticleRadius] = useState<number>(80);
   const [user, setUser] = useState<User | null>(null);
 
   const saveToHistory = () => {
@@ -324,6 +328,24 @@ export default function App() {
     engineRef.current.loadElements(elements);
   }, [elements]);
 
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.randomizeParticleForces(particleSeed);
+    }
+  }, [particleSeed]);
+
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setFriction(particleFriction);
+    }
+  }, [particleFriction]);
+
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setInteractionRadius(particleRadius);
+    }
+  }, [particleRadius]);
+
   // Simulation Loop
   useEffect(() => {
     if (!canvasRef.current || !engineRef.current) return;
@@ -410,17 +432,31 @@ export default function App() {
       }
 
       isPainting.current = true;
+      const elProp = elements.find(e => e.id === selectedElement);
       
       for (let i = -brushSize; i <= brushSize; i++) {
         for (let j = -brushSize; j <= brushSize; j++) {
            if (i*i + j*j <= brushSize*brushSize) {
+              const nx = x + i;
+              const ny = y + j;
+
+              if (elProp?.isParticleLife) {
+                 if (Math.random() < 0.2) {
+                   engineRef.current!.spawnParticle(nx, ny, Math.floor(Math.random() * 6));
+                 }
+                 continue;
+              }
+
               const options: any = { overwrite: brushOverwrite };
-              if (selectedElement === 'prop') {
+              if (selectedElement === 'prop' || selectedElement === 'clne') {
                 options.temp = brushTemp;
                 options.ctype = brushCtype;
                 options.overwrite = true;
               }
-              engineRef.current!.setPixel(x + i, y + j, selectedElement, options);
+              if (elProp?.category === 'sensors') {
+                 options.ctypeIdNum = detectionThreshold + 273.15; // Pass numeric ctype
+              }
+              engineRef.current!.setPixel(nx, ny, selectedElement, options);
            }
         }
       }
@@ -708,6 +744,98 @@ export default function App() {
                   className="w-full accent-blue-500 cursor-pointer"
                 />
               </div>
+
+              {/* --- Detection Settings --- */}
+              {elements.find(e => e.id === selectedElement)?.category === 'sensors' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="pt-4 border-t border-white/5 space-y-4"
+                >
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none block mb-2">Detection Threshold</label>
+                  <div className="flex items-center gap-3">
+                    <TemperatureInput 
+                      unit={tempUnit} 
+                      value={detectionThreshold + 273.15} 
+                      onChange={(v) => setDetectionThreshold(v - 273.15)}
+                      className="w-full bg-[#1a1a1a] border border-white/5 rounded p-2 text-xs font-mono text-orange-400 outline-none focus:border-orange-500/50"
+                    />
+                  </div>
+                  <p className="text-[9px] text-white/30 italic">Sensor will spark neighbor conductive pixels when temp exceeds this value.</p>
+                </motion.div>
+              )}
+
+              {/* --- Particle Life Settings --- */}
+              {selectedElement === 'prtl' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="pt-4 border-t border-white/5 space-y-4"
+                >
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none block mb-2">Particle Life Matrix</label>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/60">Seed</span>
+                      <input 
+                        type="text" 
+                        value={particleSeed}
+                        onChange={(e) => setParticleSeed(e.target.value)}
+                        className="bg-[#1a1a1a] border border-white/5 rounded px-2 py-1 text-[10px] w-28 outline-none focus:border-blue-500/50 text-blue-400"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-white/60">Friction</span>
+                        <span className="text-blue-400 font-mono">{particleFriction.toFixed(2)}</span>
+                      </div>
+                      <input 
+                        type="range" min="0.5" max="1" step="0.01"
+                        value={particleFriction} 
+                        onChange={(e) => setParticleFriction(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-white/5 rounded-lg accent-blue-500 appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-white/60">Radius</span>
+                        <span className="text-blue-400 font-mono">{particleRadius}px</span>
+                      </div>
+                      <input 
+                        type="range" min="20" max="300" 
+                        value={particleRadius} 
+                        onChange={(e) => setParticleRadius(parseInt(e.target.value))}
+                        className="w-full h-1 bg-white/5 rounded-lg accent-blue-500 appearance-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-white/30 italic">Click to spawn particles. Color interactions are seeded.</p>
+                </motion.div>
+              )}
+
+              {/* --- Clone Settings --- */}
+              {selectedElement === 'clne' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="pt-4 border-t border-white/5 space-y-4"
+                >
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none block mb-2">Clone Target</label>
+                  <select 
+                    value={brushCtype} 
+                    onChange={(e) => setBrushCtype(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-white/5 rounded p-2 text-xs font-mono text-yellow-400 outline-none focus:border-yellow-500/50"
+                  >
+                    <option value="empty">None (Auto-learn)</option>
+                    {elements.filter(e => e.id !== 'clne' && e.id !== 'empty').map(el => (
+                      <option key={el.id} value={el.id}>{el.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-white/30 italic">Clone generates this element. If None, it copies the first element it touches.</p>
+                </motion.div>
+              )}
             </section>
           </div>
         </aside>
@@ -1163,13 +1291,27 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                    <div className="grid grid-cols-2 gap-3 pt-2">
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">If touches</label>
-                        <select 
-                          value={reaction.targetElementId} 
-                          onChange={e => updateReaction(i, 'targetElementId', e.target.value)}
-                          className="w-full bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
-                        >
-                          {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
-                        </select>
+                        <div className="flex gap-2 items-center">
+                          <select 
+                            value={reaction.targetElementId} 
+                            onChange={e => updateReaction(i, 'targetElementId', e.target.value)}
+                            className="flex-1 bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
+                          >
+                            {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
+                          </select>
+                          <button 
+                            type="button"
+                            onClick={() => updateReaction(i, 'isExclude', !reaction.isExclude)}
+                            className={`px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
+                              reaction.isExclude 
+                                ? 'bg-red-500/20 border-red-500/50 text-red-400' 
+                                : 'bg-white/5 border-white/10 text-white/40 grayscale hover:grayscale-0'
+                            }`}
+                            title="Invert Match (All except this element)"
+                          >
+                            EXCEPT
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">Transforms to</label>
