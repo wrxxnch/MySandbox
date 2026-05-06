@@ -451,8 +451,14 @@ export class SimulationEngine {
     const targetX = x + dir;
     const targetIdx = (y - 1) * this.width + targetX;
 
-    if (targetX >= 0 && targetX < this.width && this.grid[targetIdx] === 0) {
-      this.movePixel(x, y, targetX, y - 1, elIdx);
+    if (targetX >= 0 && targetX < this.width) {
+      const targetIdx = (y - 1) * this.width + targetX;
+      const targetEl = this.elementList[this.grid[targetIdx]];
+      
+      // Move to air OR swap with liquid (bubbles rising)
+      if (this.grid[targetIdx] === 0 || (targetEl && targetEl.state === PhysicalState.LIQUID)) {
+        this.movePixel(x, y, targetX, y - 1, elIdx);
+      }
     }
   }
 
@@ -491,7 +497,10 @@ export class SimulationEngine {
     }
     
     if (targetIdx !== 0 && targetEl) {
-       if (currentEl.density > targetEl.density) {
+       const isGasRising = currentEl.state === PhysicalState.GAS && targetEl.state === PhysicalState.LIQUID;
+       const shouldSwap = currentEl.density > targetEl.density || isGasRising;
+       
+       if (shouldSwap) {
           // Atomic Swap
           this.nextGrid[oldIdx] = targetIdx;
           this.nextGrid[newIdx] = elIdx;
@@ -534,20 +543,22 @@ export class SimulationEngine {
         
         let finalColor = color;
         
-        // 1. Temperature-based color shifts
-        if (temp < 273.15) {
-           // Cold: Shift towards blue
-           const intensity = Math.min((273.15 - temp) / 273.15, 0.5);
-           finalColor = this.lerpColor(finalColor, '#0066FF', intensity);
-        } else if (temp > 350 && temp <= 800) {
-           // Warm: Shift towards red (not yet glowing)
-           const intensity = Math.min((temp - 350) / 450, 0.4);
-           finalColor = this.lerpColor(finalColor, '#FF3300', intensity);
-        } else if (temp > 800) {
-           // Glowing hot
-           const glowColor = this.getGlowColor(temp);
-           const intensity = Math.min((temp - 800) / 1500, 1.0);
-           finalColor = this.lerpColor(finalColor, glowColor, intensity);
+        // 1. Temperature-based color shifts (Skip for Air)
+        if (elIdx !== 0) {
+            if (temp < 273.15) {
+               // Cold: Shift towards blue
+               const intensity = Math.min((273.15 - temp) / 273.15, 0.5);
+               finalColor = this.lerpColor(finalColor, '#0066FF', intensity);
+            } else if (temp > 350 && temp <= 800) {
+               // Warm: Shift towards red (not yet glowing)
+               const intensity = Math.min((temp - 350) / 450, 0.4);
+               finalColor = this.lerpColor(finalColor, '#FF3300', intensity);
+            } else if (temp > 800) {
+               // Glowing hot
+               const glowColor = this.getGlowColor(temp);
+               const intensity = Math.min((temp - 800) / 1500, 1.0);
+               finalColor = this.lerpColor(finalColor, glowColor, intensity);
+            }
         }
 
         // 2. Spark overlay

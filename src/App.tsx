@@ -40,15 +40,71 @@ const formatTemp = (k: number, unit: 'K' | 'C' | 'F') => {
 };
 
 const parseTemp = (val: string): number => {
-  const num = parseFloat(val);
-  if (isNaN(num)) return 0;
+  const cleanVal = val.trim();
+  if (cleanVal === '' || cleanVal === '-' || cleanVal === '.') return NaN;
+  const num = parseFloat(cleanVal);
+  if (isNaN(num)) return NaN;
   const unit = val.toUpperCase().replace(/[^A-Z]/g, '');
-  if (unit === 'C') return num + 273.15;
-  if (unit === 'F') return (num - 32) * 5/9 + 273.15;
+  if (unit.includes('C')) return num + 273.15;
+  if (unit.includes('F')) return (num - 32) * 5/9 + 273.15;
   return num;
 };
 
 // --- Components ---
+
+const TemperatureInput = ({ 
+  value, 
+  onChange, 
+  unit,
+  className 
+}: { 
+  value: number, 
+  onChange: (val: number) => void, 
+  unit: 'K' | 'C' | 'F',
+  className?: string
+}) => {
+  const [localVal, setLocalVal] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalVal(formatTemp(value, unit));
+    }
+  }, [value, unit, isEditing]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    const parsed = parseTemp(localVal);
+    if (!isNaN(parsed)) {
+      onChange(parsed);
+    } else {
+      setLocalVal(formatTemp(value, unit));
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalVal(e.target.value);
+    // Optional: immediate parsing if it looks like a number
+    if (e.target.value.trim() !== '') {
+        const p = parseTemp(e.target.value);
+        if (!isNaN(p)) onChange(p);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={localVal}
+      onFocus={() => {
+          setIsEditing(true);
+          setLocalVal(formatTemp(value, unit).replace(/[°KCF]/g, ''));
+      }}
+      onBlur={handleBlur}
+      onChange={handleChange}
+      className={className}
+    />
+  );
+};
 
 const ToolbarButton = ({ 
   icon: Icon, 
@@ -93,7 +149,7 @@ export default function App() {
   const [tempUnit, setTempUnit] = useState<'K' | 'C' | 'F'>('C');
   const [searchQuery, setSearchQuery] = useState('');
   const [brushOverwrite, setBrushOverwrite] = useState(false);
-  const [brushTemp, setBrushTemp] = useState<string>('293'); // Default room temp
+  const [brushTemp, setBrushTemp] = useState<number>(293.15); // Default room temp
   const [brushCtype, setBrushCtype] = useState<string>('empty');
   const [viewTransform, setViewTransform] = useState({ scale: 1, x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -313,7 +369,7 @@ export default function App() {
            if (i*i + j*j <= brushSize*brushSize) {
               const options: any = { overwrite: brushOverwrite };
               if (selectedElement === 'prop') {
-                options.temp = parseTemp(brushTemp);
+                options.temp = brushTemp;
                 options.ctype = brushCtype;
                 options.overwrite = true;
               }
@@ -518,12 +574,11 @@ export default function App() {
                 <div className="space-y-3 p-3 bg-white/5 rounded-lg border border-white/10">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-white/30 uppercase">Set Temperature</label>
-                    <input 
-                      type="text" 
+                    <TemperatureInput 
                       value={brushTemp}
-                      onChange={(e) => setBrushTemp(e.target.value)}
-                      placeholder="e.g. 2000K or 20C"
-                      className="w-full bg-black/40 border border-white/5 rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
+                      unit={tempUnit}
+                      onChange={setBrushTemp}
+                      className="w-full bg-black/40 border border-white/5 rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50 text-white"
                     />
                   </div>
                   <div className="space-y-1">
@@ -867,20 +922,20 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Melting Point</label>
-                  <input 
-                    type="text" 
-                    value={formatTemp(formData.boilingPoint || 0, tempUnit)} 
-                    onChange={e => setFormData({...formData, boilingPoint: parseTemp(e.target.value)})} 
-                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
+                  <TemperatureInput 
+                    value={formData.boilingPoint || 0} 
+                    unit={tempUnit}
+                    onChange={val => setFormData({...formData, boilingPoint: val})} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white"
                   />
                </div>
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Spawning Temp</label>
-                  <input 
-                    type="text" 
-                    value={formatTemp(formData.baseTemperature || 293.15, tempUnit)} 
-                    onChange={e => setFormData({...formData, baseTemperature: parseTemp(e.target.value)})} 
-                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
+                  <TemperatureInput 
+                    value={formData.baseTemperature || 293.15} 
+                    unit={tempUnit}
+                    onChange={val => setFormData({...formData, baseTemperature: val})} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white"
                   />
                </div>
             </div>
@@ -888,11 +943,11 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Freezing Point</label>
-                  <input 
-                    type="text" 
-                    value={formatTemp(formData.freezingPoint || 0, tempUnit)} 
-                    onChange={e => setFormData({...formData, freezingPoint: parseTemp(e.target.value)})} 
-                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
+                  <TemperatureInput 
+                    value={formData.freezingPoint || 0} 
+                    unit={tempUnit}
+                    onChange={val => setFormData({...formData, freezingPoint: val})} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white"
                   />
                </div>
             </div>
