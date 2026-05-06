@@ -43,6 +43,21 @@ export class SimulationEngine {
     this.loadElements(BASE_ELEMENTS);
   }
 
+  public clear() {
+    this.grid.fill(0);
+    this.nextGrid.fill(0);
+    this.chargeGrid.fill(0);
+    this.nextChargeGrid.fill(0);
+    this.lifeGrid.fill(0);
+    this.nextLifeGrid.fill(0);
+    this.pressureGrid.fill(0);
+    this.nextPressureGrid.fill(0);
+    this.ctypeGrid.fill(0);
+    this.nextCtypeGrid.fill(0);
+    this.tempGrid.fill(293.15);
+    this.nextTempGrid.fill(293.15);
+  }
+
   public loadElements(elements: ElementProperties[]) {
     this.elementList = [...elements];
     this.elements.clear();

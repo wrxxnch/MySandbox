@@ -275,24 +275,30 @@ export default function App() {
     e.target.value = ''; // Reset input
   };
 
+  // Simulation Engine Initialization
+  useEffect(() => {
+    if (!engineRef.current) {
+      engineRef.current = new SimulationEngine();
+    }
+    engineRef.current.loadElements(elements);
+  }, [elements]);
+
   // Simulation Loop
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !engineRef.current) return;
     const ctx = canvasRef.current.getContext('2d', { alpha: false });
     if (!ctx) return;
-
-    const engine = new SimulationEngine();
-    engineRef.current = engine;
-    engine.loadElements(elements);
 
     let frameId: number;
     let lastTime = performance.now();
 
     const loop = (time: number) => {
+      if (!engineRef.current) return;
+      
       if (!isPaused) {
-        engine.step();
+        engineRef.current.step();
       }
-      engine.render(ctx);
+      engineRef.current.render(ctx!);
 
       // HUD Update
       if (mousePos.current.x >= 0) {
@@ -302,17 +308,17 @@ export default function App() {
 
           if (xInput >= 0 && xInput < GRID_WIDTH && yInput >= 0 && yInput < GRID_HEIGHT) {
               const idx = yInput * GRID_WIDTH + xInput;
-              const elIdx = engine.grid[idx];
-              const el = engine.elementList[elIdx];
-              const ctypeIdx = engine.ctypeGrid[idx];
-              const ctypeEl = engine.elementList[ctypeIdx];
+              const elIdx = engineRef.current.grid[idx];
+              const el = engineRef.current.elementList[elIdx];
+              const ctypeIdx = engineRef.current.ctypeGrid[idx];
+              const ctypeEl = engineRef.current.elementList[ctypeIdx];
               setHoverData({
                   name: el.name,
                   id: el.id,
                   abbr: el.abbreviation || el.name.substring(0, 4).toUpperCase(),
-                  tempK: engine.tempGrid[idx],
-                  pressure: engine.pressureGrid[idx].toFixed(2),
-                  life: engine.lifeGrid[idx],
+                  tempK: engineRef.current.tempGrid[idx],
+                  pressure: engineRef.current.pressureGrid[idx].toFixed(2),
+                  life: engineRef.current.lifeGrid[idx],
                   ctype: ctypeEl ? ctypeEl.id : '---',
                   ctypeName: ctypeEl ? ctypeEl.name : 'None',
                   x: xInput,
@@ -332,7 +338,7 @@ export default function App() {
 
     frameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frameId);
-  }, [isPaused, elements]);
+  }, [isPaused]); // Only restart loop when paused state changes to update the click handler closure
 
   // Painting Logic
   const isPainting = useRef(false);
@@ -470,7 +476,7 @@ export default function App() {
           <ToolbarButton icon={Undo} label="Undo" onClick={undo} />
           <ToolbarButton icon={Redo} label="Redo" onClick={redo} />
           <ToolbarButton icon={Trash2} label="Clear" onClick={() => {
-              if (engineRef.current) engineRef.current.grid.fill(0);
+              if (engineRef.current) engineRef.current.clear();
           }} />
           <div className="h-4 w-[1px] bg-white/10" />
           
