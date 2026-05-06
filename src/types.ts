@@ -65,5 +65,12 @@ export interface SimulationState {
   height: number;
 }
 
+export enum ViewMode {
+  NORMAL = 'normal',
+  HEAT = 'heat',
+  PRESSURE = 'pressure',
+  LIFE = 'life'
+}
+
 export const GRID_WIDTH = 612;
 export const GRID_HEIGHT = 384;

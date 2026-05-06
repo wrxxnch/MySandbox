@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SimulationEngine } from './engine/SimulationEngine';
-import { GRID_WIDTH, GRID_HEIGHT, ElementProperties } from './types';
+import { GRID_WIDTH, GRID_HEIGHT, ElementProperties, ViewMode } from './types';
 import { BASE_ELEMENTS } from './constants';
 import { 
   Eraser, 
@@ -178,7 +178,12 @@ export default function App() {
   const [particleSeed, setParticleSeed] = useState<string>("pixelforge");
   const [particleFriction, setParticleFriction] = useState<number>(0.95);
   const [particleRadius, setParticleRadius] = useState<number>(80);
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.NORMAL);
   const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.viewMode = viewMode;
+  }, [viewMode]);
 
   const saveToHistory = () => {
     if (!engineRef.current) return;
@@ -836,6 +841,49 @@ export default function App() {
                   <p className="text-[9px] text-white/30 italic">Clone generates this element. If None, it copies the first element it touches.</p>
                 </motion.div>
               )}
+
+              {/* --- Vision Modes --- */}
+              <section className="space-y-4 pt-4 border-t border-white/5">
+                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Vision Modes</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setViewMode(ViewMode.NORMAL)}
+                    className={cn(
+                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
+                      viewMode === ViewMode.NORMAL 
+                        ? "bg-white/20 border-white/20 text-white" 
+                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
+                    )}
+                  >Normal</button>
+                  <button 
+                    onClick={() => setViewMode(ViewMode.HEAT)}
+                    className={cn(
+                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
+                      viewMode === ViewMode.HEAT 
+                        ? "bg-orange-500/20 border-orange-500/40 text-orange-400" 
+                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
+                    )}
+                  >Heat</button>
+                  <button 
+                    onClick={() => setViewMode(ViewMode.PRESSURE)}
+                    className={cn(
+                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
+                      viewMode === ViewMode.PRESSURE 
+                        ? "bg-blue-500/20 border-blue-500/40 text-blue-400" 
+                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
+                    )}
+                  >Pressure</button>
+                  <button 
+                    onClick={() => setViewMode(ViewMode.LIFE)}
+                    className={cn(
+                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
+                      viewMode === ViewMode.LIFE 
+                        ? "bg-gray-400/20 border-gray-400/40 text-gray-400" 
+                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
+                    )}
+                  >Life</button>
+                </div>
+              </section>
             </section>
           </div>
         </aside>

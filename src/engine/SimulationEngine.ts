@@ -1,4 +1,4 @@
-import { GRID_WIDTH, GRID_HEIGHT, ElementProperties, PhysicalState, Particle } from '../types';
+import { GRID_WIDTH, GRID_HEIGHT, ElementProperties, PhysicalState, Particle, ViewMode } from '../types';
 import { BASE_ELEMENTS } from '../constants';
 
 export class SimulationEngine {
@@ -18,6 +18,7 @@ export class SimulationEngine {
   public nextTempGrid: Float32Array;
   public elements: Map<string, ElementProperties> = new Map();
   public elementList: ElementProperties[] = [];
+  public viewMode: ViewMode = ViewMode.NORMAL;
   
   // Buffers for visualization
   public imageData: ImageData;
@@ -320,6 +321,33 @@ export class SimulationEngine {
         let fy = 0;
         const a = this.particles[i];
 
+        // 1. Pressure Gradient Force
+        const px = Math.floor(a.x);
+        const py = Math.floor(a.y);
+        if (px >= 0 && px < this.width && py >= 0 && py < this.height) {
+            const idx = py * this.width + px;
+            const p = this.pressureGrid[idx];
+            if (Math.abs(p) > 0.1) {
+                // Calculate local gradient
+                const nbs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                let gradX = 0;
+                let gradY = 0;
+                for (const [dx, dy] of nbs) {
+                    const nx = px + dx;
+                    const ny = py + dy;
+                    if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+                        const np = this.pressureGrid[ny * this.width + nx];
+                        gradX += dx * (p - np);
+                        gradY += dy * (p - np);
+                    }
+                }
+                // Apply pressure force (push away from high pressure)
+                a.vx += gradX * 0.05;
+                a.vy += gradY * 0.05;
+            }
+        }
+
+        // 2. Particle Interaction Forces
         for (let j = 0; j < this.particles.length; j++) {
             if (i === j) continue;
             const b = this.particles[j];
@@ -411,8 +439,8 @@ export class SimulationEngine {
     const p = this.pressureGrid[idx];
 
     // Pressure movement (Wind effect)
-    if (Math.abs(p) > 1.0 && state !== PhysicalState.SOLID) {
-        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    if (Math.abs(p) > 0.5 && state !== PhysicalState.SOLID) {
+        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]];
         let maxDiff = 0;
         let pTarget = -1;
         for (const [dx, dy] of neighbors) {
@@ -421,16 +449,25 @@ export class SimulationEngine {
             if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
             const nIdx = ny * this.width + nx;
             const diff = p - this.pressureGrid[nIdx];
-            if (Math.abs(diff) > Math.abs(maxDiff) && this.grid[nIdx] === 0) {
-                maxDiff = diff;
-                pTarget = nIdx;
+            if (diff > maxDiff) {
+                const targetElIdx = this.grid[nIdx];
+                const targetEl = this.elementList[targetElIdx];
+                // Can move into air OR something less dense if pressure is high
+                if (targetElIdx === 0 || (targetEl && targetEl.density < element.density)) {
+                   maxDiff = diff;
+                   pTarget = nIdx;
+                }
             }
         }
-        if (pTarget !== -1 && Math.random() < Math.abs(p) * 0.1) {
-            const tx = pTarget % this.width;
-            const ty = Math.floor(pTarget / this.width);
-            this.movePixel(x, y, tx, ty, elIdx);
-            return;
+        
+        if (pTarget !== -1) {
+            const moveChance = Math.min(Math.abs(p) * 0.2, 1.0);
+            if (Math.random() < moveChance) {
+                const tx = pTarget % this.width;
+                const ty = Math.floor(pTarget / this.width);
+                this.movePixel(x, y, tx, ty, elIdx);
+                return;
+            }
         }
     }
 
@@ -505,17 +542,65 @@ export class SimulationEngine {
        }
     }
     
-    // Combustion logic
-    if (element.flammability > 0 && currentTemp > 450) {
-        if (Math.random() < element.flammability * 0.1) {
-            const fireIdx = this.elementList.findIndex(e => e.id === 'fire');
-            if (fireIdx >= 0) {
-                this.nextGrid[idx] = fireIdx;
-                this.nextLifeGrid[idx] = 80 + Math.floor(Math.random() * 40);
-                this.nextTempGrid[idx] += 100;
-                return;
+    // Explosion & Combustion logic
+    if (element.isExplosive || element.flammability > 0) {
+      let exploded = false;
+      const ignitionTemp = element.isExplosive ? 450 : 500;
+      if (currentTemp > ignitionTemp) exploded = true;
+      
+      if (!exploded) {
+        const nbs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (const [dx, dy] of nbs) {
+          const nx = x + dx; const ny = y + dy;
+          if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+            const nElIdx = this.grid[ny * this.width + nx];
+            const nEl = this.elementList[nElIdx];
+            if (nEl && (nEl.id === 'fire' || nEl.id === 'sprk' || nEl.id === 'embr' || nEl.id === 'lava')) {
+              exploded = true;
+              break;
             }
+          }
         }
+      }
+
+      if (exploded) {
+        if (element.isExplosive) {
+           let radius = 6;
+           let fireAmount = 0.8;
+           let sparkId: string | null = null;
+           
+           if (element.id === 'c4') { 
+              radius = 12; 
+              fireAmount = 0.7; 
+           } else if (element.id === 'tnt') { 
+              radius = 10; 
+              fireAmount = 0.65; 
+              sparkId = 'embr'; 
+           } else if (element.id === 'gun') { 
+              radius = 5; 
+              fireAmount = 0.9; 
+           } else if (element.id === 'rbi_s' || element.id === 'rbi_l') { 
+              radius = 8; 
+              fireAmount = 0.8; 
+           } else if (element.id === 'nitr') { 
+              radius = 7; 
+              fireAmount = 0.9; 
+           }
+           
+           this.triggerExplosion(x, y, radius, fireAmount, sparkId);
+           return;
+        } else {
+           if (Math.random() < element.flammability * 0.1) {
+              const fireIdx = this.elementList.findIndex(e => e.id === 'fire');
+              if (fireIdx >= 0) {
+                  this.nextGrid[idx] = fireIdx;
+                  this.nextLifeGrid[idx] = 80 + Math.floor(Math.random() * 40);
+                  this.nextTempGrid[idx] += 100;
+                  return;
+              }
+           }
+        }
+      }
     }
 
     // Decay logic
@@ -769,6 +854,48 @@ export class SimulationEngine {
     this.nextGrid[y * this.width + x] = 0;
   }
 
+  private triggerExplosion(x: number, y: number, radius: number, fireAmount: number, sparkId: string | null = null) {
+     const fireIdx = this.elementList.findIndex(e => e.id === 'fire');
+     const sparkIdx = sparkId ? this.elementList.findIndex(e => e.id === sparkId) : -1;
+     
+     for (let dy = -radius; dy <= radius; dy++) {
+       for (let dx = -radius; dx <= radius; dx++) {
+         const nx = x + dx;
+         const ny = y + dy;
+         if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+         
+         const d2 = dx * dx + dy * dy;
+         if (d2 <= radius * radius) {
+           const idx = ny * this.width + nx;
+           const elIdx = this.grid[idx];
+           const el = this.elementList[elIdx];
+           
+           if (el && el.isIndestructible) continue;
+           
+           const dist = Math.sqrt(d2);
+           const pFactor = (radius - dist) / radius;
+           this.nextPressureGrid[idx] += 80.0 * pFactor;
+           this.nextTempGrid[idx] += 1200.0 * pFactor;
+
+           if (Math.random() < fireAmount) {
+             if (fireIdx >= 0) {
+              this.nextGrid[idx] = fireIdx;
+              this.nextLifeGrid[idx] = 60 + Math.floor(Math.random() * 40);
+              this.nextTempGrid[idx] = Math.max(this.nextTempGrid[idx], 1500); // Explosions are hot!
+             }
+           } else if (sparkIdx >= 0 && Math.random() < 0.3) {
+              this.nextGrid[idx] = sparkIdx;
+              if (sparkId === 'embr') {
+                  this.nextTempGrid[idx] = 495.15; // 222C
+              }
+           } else if (Math.random() < 0.1) {
+              this.nextGrid[idx] = 0; // Air
+           }
+         }
+       }
+     }
+  }
+
   public render(ctx: CanvasRenderingContext2D) {
     for (let i = 0; i < this.grid.length; i++) {
         const elIdx = this.grid[i];
@@ -776,47 +903,85 @@ export class SimulationEngine {
         const color = element.color;
         const life = this.lifeGrid[i];
         const temp = this.tempGrid[i];
+        const pressure = this.pressureGrid[i];
         
         let finalColor = color;
-        
-        // Fire custom color gradient
-        if (element.id === 'fire') {
-          // Gradient based on current life (starts ~100)
-          if (life > 80) {
-            finalColor = '#FFFF00'; // Yellow
-          } else if (life > 40) {
-            finalColor = '#FF8800'; // Orange
-          } else {
-            finalColor = '#FF4500'; // Red
-          }
-          
-          // Flicker
-          if (Math.random() > 0.8) {
-            finalColor = this.lerpColor(finalColor, '#FFFFFF', 0.3);
-          }
-        } else if (elIdx !== 0) {
-            // 1. Temperature-based color shifts (Skip for Air)
-            if (temp < 273.15) {
-               // Cold: Shift towards blue
-               const intensity = Math.min((273.15 - temp) / 273.15, 0.5);
-               finalColor = this.lerpColor(finalColor, '#0066FF', intensity);
-            } else if (temp > 350 && temp <= 800) {
-               // Warm: Shift towards red (not yet glowing)
-               const intensity = Math.min((temp - 350) / 450, 0.4);
-               finalColor = this.lerpColor(finalColor, '#FF3300', intensity);
-            } else if (temp > 800) {
-               // Glowing hot
-               const glowColor = this.getGlowColor(temp);
-               const intensity = Math.min((temp - 800) / 1500, 1.0);
-               finalColor = this.lerpColor(finalColor, glowColor, intensity);
-            }
-        }
 
-        // 2. Spark overlay
-        if (life > 0 && element.id !== 'fire') {
-          // Sparks are bright yellow-white
-          const sparkColor = '#FFFFCC';
-          finalColor = this.lerpColor(finalColor, sparkColor, life / 4);
+        if (this.viewMode === ViewMode.HEAT) {
+            // Heat view: Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Pink (9700C+)
+            const tempC = temp - 273.15;
+            if (tempC < -100) finalColor = '#0000FF'; // Blue
+            else if (tempC < 0) finalColor = '#00FFFF'; // Cyan
+            else if (tempC < 50) finalColor = '#00FF00'; // Green
+            else if (tempC < 200) finalColor = '#FFFF00'; // Yellow
+            else if (tempC < 1000) finalColor = '#FF8800'; // Orange
+            else if (tempC < 5000) finalColor = '#FF0000'; // Red
+            else finalColor = '#FF00FF'; // Pink (hot!)
+        } else if (this.viewMode === ViewMode.PRESSURE) {
+            // Pressure view: Green positive, Red vacuum, Blue slight vacuum
+            if (pressure > 0.5) finalColor = '#00FF00'; // Green (Wind/Pressure)
+            else if (pressure < -5.0) finalColor = '#FF0000'; // Red (High vacuum)
+            else if (pressure < -0.5) finalColor = '#0000FF'; // Blue (Low vacuum)
+            else finalColor = '#000000'; // Black (Neutral)
+        } else if (this.viewMode === ViewMode.LIFE) {
+            // Life view: High (light gray) -> Low (black)
+            const l = Math.floor((life / 255) * 255);
+            if (elIdx !== 0 || life > 0) {
+              const grey = Math.floor((life / 100) * 200); // Life is usually 0-100 or 0-4
+              // For electrical life (0-4), we need more contrast
+              if (life > 0 && life <= 4) {
+                 const g = 50 + life * 50;
+                 finalColor = `rgb(${g},${g},${g})`;
+              } else {
+                 finalColor = `rgb(${grey},${grey},${grey})`;
+              }
+            } else {
+              finalColor = '#000000';
+            }
+            if (typeof finalColor === 'string' && finalColor.startsWith('rgb')) {
+                const parts = finalColor.match(/\d+/g);
+                if (parts) {
+                    const r = parseInt(parts[0]);
+                    const g = parseInt(parts[1]);
+                    const b = parseInt(parts[2]);
+                    finalColor = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+                }
+            }
+        } else {
+            // Normal view
+            // Fire custom color gradient
+            if (element.id === 'fire') {
+              if (life > 80) {
+                finalColor = '#FFFF00'; // Yellow
+              } else if (life > 40) {
+                finalColor = '#FF8800'; // Orange
+              } else {
+                finalColor = '#FF4500'; // Red
+              }
+              
+              if (Math.random() > 0.8) {
+                finalColor = this.lerpColor(finalColor, '#FFFFFF', 0.3);
+              }
+            } else if (elIdx !== 0) {
+                // Temperature-based color shifts (Skip for Air and Gases if they are cooling down)
+                if (temp < 273.15 && element.state !== PhysicalState.GAS) {
+                   const intensity = Math.min((273.15 - temp) / 273.15, 0.5);
+                   finalColor = this.lerpColor(finalColor, '#0066FF', intensity);
+                } else if (temp > 350 && temp <= 800) {
+                   const intensity = Math.min((temp - 350) / 450, 0.4);
+                   finalColor = this.lerpColor(finalColor, '#FF3300', intensity);
+                } else if (temp > 800) {
+                   const glowColor = this.getGlowColor(temp);
+                   const intensity = Math.min((temp - 800) / 1500, 1.0);
+                   finalColor = this.lerpColor(finalColor, glowColor, intensity);
+                }
+            }
+
+            // Spark overlay
+            if (life > 0 && element.id !== 'fire' && element.id !== 'smke') {
+              const sparkColor = '#FFFFCC';
+              finalColor = this.lerpColor(finalColor, sparkColor, life / 4);
+            }
         }
 
         this.buffer[i] = this.hexToUint32(finalColor);
