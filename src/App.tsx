@@ -134,6 +134,24 @@ const ToolbarButton = ({
   </button>
 );
 
+const ExportOption = ({ 
+  label, 
+  desc, 
+  onClick 
+}: { 
+  label: string, 
+  desc: string, 
+  onClick: () => void 
+}) => (
+  <button
+    onClick={onClick}
+    className="w-full flex flex-col items-start px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left"
+  >
+    <span className="text-xs font-bold text-white/80">{label}</span>
+    <span className="text-[10px] text-white/40">{desc}</span>
+  </button>
+);
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<SimulationEngine | null>(null);
@@ -155,6 +173,7 @@ export default function App() {
   const [isPanning, setIsPanning] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   const saveToHistory = () => {
@@ -222,19 +241,41 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleExport = () => {
-    const includeBase = window.confirm("Incluir elementos padrões no export?");
-    const elementsToExport = includeBase ? elements : elements.filter(e => e.id.startsWith('custom-'));
-    const data = JSON.stringify(elementsToExport, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pixel-forge-elements-${includeBase ? 'full' : 'custom'}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const executeExport = (choice: '1' | '2' | '3') => {
+    let elementsToExport: ElementProperties[] = [];
+    if (choice === '1') {
+      elementsToExport = elements;
+    } else if (choice === '2') {
+      elementsToExport = elements.filter(e => e.id.startsWith('custom-'));
+    } else if (choice === '3') {
+      elementsToExport = elements.filter(e => !e.id.startsWith('custom-'));
+    }
+
+    if (elementsToExport.length === 0) {
+      alert("Nenhum elemento encontrado para exportação.");
+      return;
+    }
+
+    try {
+      const data = JSON.stringify(elementsToExport, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      const suffix = choice === '1' ? 'full' : choice === '2' ? 'custom' : 'base';
+      a.download = `pixelforge-elements-${suffix}.json`;
+      
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Falha ao exportar elementos.");
+    }
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -487,8 +528,44 @@ export default function App() {
             accept=".json" 
             onChange={handleImport} 
           />
-          <ToolbarButton icon={Upload} onClick={() => fileInputRef.current?.click()} />
-          <ToolbarButton icon={Download} onClick={handleExport} />
+          <ToolbarButton icon={Upload} label="Import" onClick={() => fileInputRef.current?.click()} />
+          <div className="relative">
+            <ToolbarButton 
+              icon={Download} 
+              label="Export" 
+              active={showExportMenu}
+              onClick={() => setShowExportMenu(!showExportMenu)} 
+            />
+            <AnimatePresence>
+              {showExportMenu && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full mt-2 right-0 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-[100] w-56 flex flex-col gap-1 overflow-hidden"
+                >
+                  <div className="px-3 py-2 border-b border-white/5 mb-1">
+                    <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Select Mode</span>
+                  </div>
+                  <ExportOption 
+                    label="All Elements" 
+                    desc="Everything in the current set"
+                    onClick={() => { executeExport('1'); setShowExportMenu(false); }} 
+                  />
+                  <ExportOption 
+                    label="Custom Elements" 
+                    desc="Only items you created"
+                    onClick={() => { executeExport('2'); setShowExportMenu(false); }} 
+                  />
+                  <ExportOption 
+                    label="Base Elements" 
+                    desc="Original library properties"
+                    onClick={() => { executeExport('3'); setShowExportMenu(false); }} 
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           
           {user && (
             <ToolbarButton 
