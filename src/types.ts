@@ -35,6 +35,7 @@ export interface ElementProperties {
   decayChance?: number;
   isExplosive: boolean;
   explosiveTrigger?: 'contact' | 'temp' | 'electricity';
+  isSource?: boolean; // Continuous electrical source
   category: string;
   reactions: ElementReaction[];
   isIndestructible?: boolean;

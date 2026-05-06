@@ -128,20 +128,19 @@ export class SimulationEngine {
     }
 
     // Add initial charge for dedicated sources
-    if (elementId === 'positive') {
+    const el = elIndex >= 0 ? this.elementList[elIndex] : null;
+    if ((el && el.isSource) || elementId === 'sprk') {
       this.lifeGrid[index] = 4;
-    } else if (elementId === 'negative') {
-       this.lifeGrid[index] = 4;
     }
   }
 
   public step() {
-    // Copy current state to next buffers
+    // Copy current state to next buffers for persistent properties
     this.nextGrid.set(this.grid);
     this.nextTempGrid.set(this.tempGrid);
-    this.nextLifeGrid.fill(0);
-    this.nextPressureGrid.fill(0); // Optional: keep some pressure or decay it
     this.nextCtypeGrid.set(this.ctypeGrid);
+    this.nextPressureGrid.set(this.pressureGrid);
+    this.nextLifeGrid.fill(0);
 
     // 1. Spark / Electricity Propagation (TPT-like Life Cycle)
     for (let y = 0; y < this.height; y++) {
@@ -151,18 +150,15 @@ export class SimulationEngine {
         const elIdx = this.grid[idx];
         const el = this.elementList[elIdx];
 
-        if (life > 0) {
+        if (el && el.isSource) {
+           this.nextLifeGrid[idx] = 4;
+        } else if (life > 0) {
            // Decay
            this.nextLifeGrid[idx] = life - 1;
-
-           // Permanent sources
-           if (el && (el.id === 'positive' || el.id === 'negative')) {
-              this.nextLifeGrid[idx] = 4;
-           }
         }
 
-        // Conduction at Life 3
-        if (life === 3 && el && el.conductivity > 0) {
+        // Conduction at Life 3 or 4 (sources always spark)
+        if (el && (life === 3 || (life === 4 && el.isSource)) && el.conductivity > 0) {
            const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
            for (const [dx, dy] of neighbors) {
              const nx = x + dx;
@@ -209,10 +205,8 @@ export class SimulationEngine {
         }
       }
     }
-    this.lifeGrid.set(this.nextLifeGrid);
-    this.tempGrid.set(this.nextTempGrid);
-
     // 2. Physics logic
+    // We work from current life/temp/etc into next buffers
     for (let y = this.height - 1; y >= 0; y--) {
       for (let x = 0; x < this.width; x++) {
         const index = y * this.width + x;
@@ -224,10 +218,17 @@ export class SimulationEngine {
       }
     }
 
-    // Swap grids
-    const temp = this.grid;
-    this.grid = this.nextGrid;
-    this.nextGrid = temp;
+    // Swap all grids
+    this.swapBuffers();
+  }
+
+  private swapBuffers() {
+    let tmp;
+    tmp = this.grid; this.grid = this.nextGrid; this.nextGrid = tmp;
+    tmp = this.lifeGrid; this.lifeGrid = this.nextLifeGrid; this.nextLifeGrid = tmp;
+    tmp = this.tempGrid; this.tempGrid = this.nextTempGrid; this.nextTempGrid = tmp;
+    tmp = this.pressureGrid; this.pressureGrid = this.nextPressureGrid; this.nextPressureGrid = tmp;
+    tmp = this.ctypeGrid; this.ctypeGrid = this.nextCtypeGrid; this.nextCtypeGrid = tmp;
   }
 
   private updatePixel(x: number, y: number, element: ElementProperties, elIdx: number) {
@@ -496,6 +497,45 @@ export class SimulationEngine {
 
     // Contact decay / transformation
     const currentEl = this.elementList[elIdx];
+
+    // --- Special Element Logic: VOID / ABSORB ---
+    if (targetEl && (targetEl.id === 'void' || targetEl.id === 'absorb_wall')) {
+      this.nextGrid[oldIdx] = 0; // Destroy the element trying to move in
+      return;
+    }
+    if (currentEl && (currentEl.id === 'void' || currentEl.id === 'absorb_wall')) {
+       // Void itself doesn't move easily if SOLID, but if anything swaps with it, it should vanish
+       // The handle logics usually manage this.
+    }
+
+    // --- Special Element Logic: CLONE ---
+    if (targetEl && targetEl.id === 'clne') {
+       // If clone touches something, set ctype
+       if (currentEl.id !== 'empty' && currentEl.id !== 'clne') {
+         this.nextCtypeGrid[newIdx] = elIdx;
+       }
+       // If clone has a ctype, spawn it
+       const ctype = this.ctypeGrid[newIdx];
+       if (ctype !== 0) {
+         // Spawn neighbors
+         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+         for (const [dx, dy] of neighbors) {
+           const nx = newX + dx;
+           const ny = newY + dy;
+           if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+             const nIdx = ny * this.width + nx;
+             if (this.grid[nIdx] === 0) {
+               this.nextGrid[nIdx] = ctype;
+             }
+           }
+         }
+       }
+       return; // Clone doesn't move and doesn't get swapped
+    }
+
+    if (targetEl && targetEl.isIndestructible) return;
+
+    // Contact decay / transformation
     if (targetEl && targetEl.decaysIntoId && Math.random() < (targetEl.decayChance || 0)) {
        const decayIdx = this.elementList.findIndex(e => e.id === targetEl.decaysIntoId);
        if (decayIdx >= 0) {
@@ -506,8 +546,6 @@ export class SimulationEngine {
         const decayIdx = this.elementList.findIndex(e => e.id === currentEl.decaysIntoId);
         if (decayIdx >= 0) {
           this.nextGrid[oldIdx] = decayIdx;
-          // Continue move logic if it didn't just transform? 
-          // Usually transformations stop movement for that frame.
         }
     }
     

@@ -516,44 +516,59 @@ export default function App() {
               />
             </div>
 
-            {/* Element Grid */}
-            <section>
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Elements</h2>
-              <div className="grid grid-cols-2 gap-2">
-                {elements.filter(el => 
-                  el.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  el.id.toLowerCase().includes(searchQuery.toLowerCase())
-                ).map((el) => (
-                  <button
-                    key={el.id}
-                    onClick={() => setSelectedElement(el.id)}
-                    className={cn(
-                      "group relative flex items-center gap-2 p-2 rounded-lg border border-white/5 transition-all text-left overflow-hidden",
-                      selectedElement === el.id 
-                        ? "bg-white/10 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]" 
-                        : "hover:bg-white/5"
-                    )}
-                  >
-                    <div 
-                      className="w-3 h-3 rounded-sm shadow-sm transition-transform group-hover:scale-110 shrink-0" 
-                      style={{ backgroundColor: el.color }}
-                    />
-                    <span className="text-[11px] font-medium truncate flex-1">{el.name}</span>
-                    {selectedElement === el.id && (
-                      <motion.div 
-                        layoutId="active-pill"
-                        className="absolute inset-0 border border-blue-500/30 rounded-lg pointer-events-none"
-                      />
-                    )}
-                  </button>
-                ))}
-                <button 
-                   onClick={() => setIsEditorOpen(true)}
-                   className="flex items-center gap-2 p-2 rounded-lg border border-dashed border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all text-xs font-medium"
-                >
-                   <Plus size={14} /> New
-                </button>
-              </div>
+            {/* Element Grid grouped by Category */}
+            <section className="space-y-6">
+              {['walls', 'electronics', 'sensors', 'force', 'powders', 'liquids', 'gases', 'solids', 'explosives', 'radioactive', 'life', 'special', 'custom'].map(cat => {
+                const catElements = elements.filter(el => 
+                  el.category === cat && 
+                  (el.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                   el.id.toLowerCase().includes(searchQuery.toLowerCase()))
+                );
+                
+                if (catElements.length === 0) return null;
+
+                return (
+                  <div key={cat} className="space-y-2">
+                    <h3 className="text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] flex items-center gap-2">
+                       <span className="w-1 h-1 rounded-full bg-white/20" />
+                       {cat}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {catElements.map((el) => (
+                        <button
+                          key={el.id}
+                          onClick={() => setSelectedElement(el.id)}
+                          className={cn(
+                            "group relative flex items-center gap-2 p-1.5 rounded border border-white/5 transition-all text-left overflow-hidden",
+                            selectedElement === el.id 
+                              ? "bg-white/10 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.1)]" 
+                              : "hover:bg-white/5 active:bg-white/10"
+                          )}
+                        >
+                          <div 
+                            className="w-2.5 h-2.5 rounded-xs shadow-sm transition-transform group-hover:scale-110 shrink-0" 
+                            style={{ backgroundColor: el.color }}
+                          />
+                          <span className="text-[10px] font-medium truncate flex-1">{el.name}</span>
+                          {selectedElement === el.id && (
+                            <motion.div 
+                              layoutId="active-pill"
+                              className="absolute inset-0 border border-blue-500/30 rounded-lg pointer-events-none"
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              
+              <button 
+                 onClick={() => setIsEditorOpen(true)}
+                 className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all text-xs font-medium"
+              >
+                 <Plus size={14} /> New Element
+              </button>
             </section>
 
             {/* Brush Controls */}
