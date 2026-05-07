@@ -217,6 +217,7 @@ export default function App() {
   const [isBottomBarHovered, setIsBottomBarHovered] = useState(false);
   const [sidebarPosition, setSidebarPosition] = useState<'left' | 'right'>('right');
   const [isMagnifierActive, setIsMagnifierActive] = useState(false);
+  const [fixedMagnifierPos, setFixedMagnifierPos] = useState<{x: number, y: number} | null>(null);
   const [magnifierScale, setMagnifierScale] = useState(4);
   const [showSettings, setShowSettings] = useState(false);
   const [showProps, setShowProps] = useState(false);
@@ -499,8 +500,26 @@ export default function App() {
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = rect.width / GRID_WIDTH;
     const scaleY = rect.height / GRID_HEIGHT;
-    const x = Math.floor((e.clientX - rect.left) / scaleX);
-    const y = Math.floor((e.clientY - rect.top) / scaleY);
+    
+    let x = Math.floor((e.clientX - rect.left) / scaleX);
+    let y = Math.floor((e.clientY - rect.top) / scaleY);
+
+    // If clicking inside fixed magnifier preview
+    const isMagnifierClick = (e.target as HTMLElement).id === 'magnifier-canvas';
+    if (isMagnifierClick && fixedMagnifierPos) {
+      const magRect = (e.target as HTMLElement).getBoundingClientRect();
+      const mx = (e.clientX - magRect.left) / magRect.width;
+      const my = (e.clientY - magRect.top) / magRect.height;
+      const size = 150 / magnifierScale;
+      x = Math.floor(fixedMagnifierPos.x - size/2 + (mx * size));
+      y = Math.floor(fixedMagnifierPos.y - size/2 + (my * size));
+    }
+
+    if (e.type === 'pointerdown' && isMagnifierActive && !isMagnifierClick && !e.ctrlKey && !e.shiftKey) {
+       // Toggle fix position on normal grid click while magnifier tool is active
+       setFixedMagnifierPos({ x, y });
+       return;
+    }
 
     if (isPainting.current || e.type === 'pointerdown') {
       isPainting.current = true;
@@ -545,11 +564,19 @@ export default function App() {
 
   const handleWheel = (e: React.WheelEvent) => {
     if (isMobile) return;
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewTransform(prev => ({
-      ...prev,
-      scale: Math.max(0.1, Math.min(10, prev.scale * delta))
-    }));
+    
+    if (e.ctrlKey) {
+      // Zoom with Ctrl + Wheel
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setViewTransform(prev => ({
+        ...prev,
+        scale: Math.max(0.1, Math.min(10, prev.scale * delta))
+      }));
+    } else {
+      // Brush size with normal Wheel
+      const delta = e.deltaY > 0 ? -1 : 1;
+      setBrushSize(prev => Math.max(1, Math.min(50, prev + delta)));
+    }
   };
 
   const stopPainting = () => {
@@ -898,28 +925,90 @@ export default function App() {
         ) : (
           <div className="flex-1 flex flex-col relative overflow-hidden">
             <div className="flex-1 relative bg-black flex">
-              {/* Left Sidebar if position is left */}
+              {/* Left Sidebar enhancement */}
               {sidebarPosition === 'left' && (
                 <div 
                   onMouseEnter={() => setIsSidebarHovered(true)} 
                   onMouseLeave={() => setIsSidebarHovered(false)} 
                   className={cn(
-                    "w-12 border-r border-white/10 bg-[#0f0f0f] flex flex-col items-center py-2 gap-1 transition-all duration-300 z-50 overflow-y-auto custom-scrollbar shrink-0",
-                    !isSidebarHovered && "opacity-40 grayscale"
+                    "w-64 border-r border-white/10 bg-[#0f0f0f] flex flex-col transition-all duration-300 z-50 overflow-y-auto custom-scrollbar shrink-0",
+                    !isSidebarHovered && "opacity-40 grayscale-[0.8]"
                   )}
                 >
-                  {CATEGORIES.map(cat => (
-                    <button 
-                      key={cat.id} 
-                      onClick={() => setSelectedCategory(cat.id)} 
-                      className={cn(
-                        "w-10 h-10 flex items-center justify-center rounded transition-all",
-                        selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
-                      )}
-                    >
-                      <cat.icon size={18} />
-                    </button>
-                  ))}
+                  <div className="p-4 space-y-6">
+                    <section className="space-y-4">
+                      <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Categories</h3>
+                      <div className="grid grid-cols-4 gap-1">
+                        {CATEGORIES.map(cat => (
+                          <button 
+                            key={cat.id} 
+                            onClick={() => setSelectedCategory(cat.id)} 
+                            className={cn(
+                              "aspect-square flex items-center justify-center rounded transition-all",
+                              selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
+                            )}
+                            title={cat.name}
+                          >
+                            <cat.icon size={16} />
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="pt-4 border-t border-white/5 space-y-4">
+                       <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Brush</h3>
+                       <div className="space-y-3">
+                          <div className="flex justify-between items-center text-[10px] font-mono text-white/40">
+                             <span>Size</span>
+                             <span>{brushSize}px</span>
+                          </div>
+                          <input 
+                            type="range" min="1" max="50" value={brushSize} 
+                            onChange={(e) => setBrushSize(parseInt(e.target.value))} 
+                            className="w-full accent-blue-500 h-1" 
+                          />
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-white/40 uppercase">Overwrite</span>
+                            <button 
+                              onClick={() => setBrushOverwrite(!brushOverwrite)}
+                              className={cn("w-7 h-3.5 rounded-full relative transition-colors", brushOverwrite ? "bg-blue-600" : "bg-white/10")}
+                            >
+                               <div className={cn("absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all", brushOverwrite ? "right-0.5" : "left-0.5")} />
+                            </button>
+                          </div>
+                       </div>
+                    </section>
+
+                    {elements.find(e => e.id === selectedElement) && (
+                      <section className="pt-4 border-t border-white/5 space-y-3">
+                        <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Selection</h3>
+                        <div className="p-3 rounded-lg bg-white/5 border border-white/5 space-y-3">
+                           <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded shadow-inner" style={{ backgroundColor: elements.find(e => e.id === selectedElement)!.color }} />
+                              <div className="min-w-0">
+                                 <div className="text-[11px] font-bold truncate">{elements.find(e => e.id === selectedElement)!.name}</div>
+                                 <div className="text-[9px] text-white/40 font-mono">{(elements.find(e => e.id === selectedElement)!.category || '---').toUpperCase()}</div>
+                              </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => setIsEditorOpen(true)} className="py-1.5 bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/30">Edit</button>
+                              <button 
+                                onClick={() => {
+                                  const base = elements.find(e => e.id === selectedElement)!;
+                                  const clone = { ...base, id: 'custom-' + Date.now(), name: base.name + ' (Copy)' };
+                                  setEditingElement(clone);
+                                  setIsEditorOpen(true);
+                                }} 
+                                className="py-1.5 bg-white/5 text-white/60 text-[9px] font-bold uppercase rounded border border-white/10 hover:bg-white/10"
+                              >Clone</button>
+                           </div>
+                           {(selectedElement === 'wifi' || selectedElement === 'sensor') && (
+                              <button onClick={() => setShowProps(true)} className="w-full py-1.5 bg-orange-600/20 text-orange-400 text-[9px] font-bold uppercase rounded border border-orange-500/20">Config Props</button>
+                           )}
+                        </div>
+                      </section>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -939,32 +1028,54 @@ export default function App() {
                 {/* Magnifier Preview Tool */}
                 {isMagnifierActive && (
                   <div 
-                    className="absolute z-[150] pointer-events-none border-2 border-blue-500 shadow-2xl rounded-sm overflow-hidden bg-black"
+                    className={cn(
+                      "absolute z-[150] border-2 shadow-2xl rounded-sm overflow-hidden bg-black",
+                      fixedMagnifierPos ? "border-green-500" : "border-blue-500 pointer-events-none"
+                    )}
                     style={{
-                      left: mousePos.current.x - (isMobile ? 0 : 200),
-                      top: mousePos.current.y - (isMobile ? 150 : 200),
+                      left: fixedMagnifierPos ? 40 : mousePos.current.x - (isMobile ? 0 : 200),
+                      top: fixedMagnifierPos ? 40 : mousePos.current.y - (isMobile ? 150 : 200),
                       width: 150,
                       height: 150,
-                      display: (mousePos.current.x < 0) ? 'none' : 'block'
+                      display: (mousePos.current.x < 0 && !fixedMagnifierPos) ? 'none' : 'block'
                     }}
                   >
-                    <div className="absolute top-0 right-0 bg-blue-600 text-[8px] font-bold px-1 py-0.5">{magnifierScale}x</div>
+                    <div className="absolute top-0 right-0 bg-blue-600 text-[8px] font-bold px-1 py-0.5 z-10 flex items-center gap-1">
+                      {fixedMagnifierPos && <div className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />}
+                      {magnifierScale}x
+                    </div>
+                    {fixedMagnifierPos && (
+                      <button 
+                        className="absolute bottom-0 right-0 p-1 bg-black/80 text-white/40 hover:text-white z-10 pointer-events-auto"
+                        onClick={() => setFixedMagnifierPos(null)}
+                      >
+                        <Plus size={8} className="rotate-45" />
+                      </button>
+                    )}
                     <canvas 
+                       id="magnifier-canvas"
                        width={150} height={150}
+                       onPointerDown={handlePointer}
+                       onPointerMove={handlePointer}
+                       className="pointer-events-auto cursor-crosshair"
                        ref={(el) => {
                          if (!el || !canvasRef.current || !isMagnifierActive) return;
                          const ctx = el.getContext('2d');
                          if (!ctx) return;
                          const rect = canvasRef.current.getBoundingClientRect();
-                         const sx = (mousePos.current.x - rect.left) * (GRID_WIDTH / rect.width);
-                         const sy = (mousePos.current.y - rect.top) * (GRID_HEIGHT / rect.height);
+                         
+                         // Use fixed pos or dynamic pos
+                         const targetX = fixedMagnifierPos ? fixedMagnifierPos.x : (mousePos.current.x - rect.left) * (GRID_WIDTH / rect.width);
+                         const targetY = fixedMagnifierPos ? fixedMagnifierPos.y : (mousePos.current.y - rect.top) * (GRID_HEIGHT / rect.height);
+                         
                          ctx.imageSmoothingEnabled = false;
                          ctx.clearRect(0, 0, 150, 150);
                          const size = 150 / magnifierScale;
-                         ctx.drawImage(canvasRef.current, sx - size/2, sy - size/2, size, size, 0, 0, 150, 150);
+                         ctx.drawImage(canvasRef.current, targetX - size/2, targetY - size/2, size, size, 0, 0, 150, 150);
                          // Center crosshair
-                         ctx.strokeStyle = 'white';
+                         ctx.strokeStyle = fixedMagnifierPos ? 'rgba(255,255,255,0.5)' : 'white';
                          ctx.lineWidth = 0.5;
+                         ctx.strokeRect(0, 0, 150, 150);
                          ctx.beginPath();
                          ctx.moveTo(75, 70); ctx.lineTo(75, 80);
                          ctx.moveTo(70, 75); ctx.lineTo(80, 75);
@@ -975,28 +1086,90 @@ export default function App() {
                 )}
               </div>
 
-              {/* Right Sidebar - Categories */}
+              {/* Right Sidebar enhancement */}
               {sidebarPosition === 'right' && (
                 <div 
                   onMouseEnter={() => setIsSidebarHovered(true)} 
                   onMouseLeave={() => setIsSidebarHovered(false)} 
                   className={cn(
-                    "w-12 border-l border-white/10 bg-[#0f0f0f] flex flex-col items-center py-2 gap-1 transition-all duration-300 z-50 overflow-y-auto custom-scrollbar shrink-0",
-                    !isSidebarHovered && "opacity-40 grayscale"
+                    "w-64 border-l border-white/10 bg-[#0f0f0f] flex flex-col transition-all duration-300 z-50 overflow-y-auto custom-scrollbar shrink-0",
+                    !isSidebarHovered && "opacity-40 grayscale-[0.8]"
                   )}
                 >
-                  {CATEGORIES.map(cat => (
-                    <button 
-                      key={cat.id} 
-                      onClick={() => setSelectedCategory(cat.id)} 
-                      className={cn(
-                        "w-10 h-10 flex items-center justify-center rounded transition-all",
-                        selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
-                      )}
-                    >
-                      <cat.icon size={18} />
-                    </button>
-                  ))}
+                  <div className="p-4 space-y-6">
+                    <section className="space-y-4">
+                      <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Categories</h3>
+                      <div className="grid grid-cols-4 gap-1">
+                        {CATEGORIES.map(cat => (
+                          <button 
+                            key={cat.id} 
+                            onClick={() => setSelectedCategory(cat.id)} 
+                            className={cn(
+                              "aspect-square flex items-center justify-center rounded transition-all",
+                              selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
+                            )}
+                            title={cat.name}
+                          >
+                            <cat.icon size={16} />
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="pt-4 border-t border-white/5 space-y-4">
+                       <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Brush</h3>
+                       <div className="space-y-3">
+                          <div className="flex justify-between items-center text-[10px] font-mono text-white/40">
+                             <span>Size</span>
+                             <span>{brushSize}px</span>
+                          </div>
+                          <input 
+                            type="range" min="1" max="50" value={brushSize} 
+                            onChange={(e) => setBrushSize(parseInt(e.target.value))} 
+                            className="w-full accent-blue-500 h-1" 
+                          />
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-white/40 uppercase">Overwrite</span>
+                            <button 
+                              onClick={() => setBrushOverwrite(!brushOverwrite)}
+                              className={cn("w-7 h-3.5 rounded-full relative transition-colors", brushOverwrite ? "bg-blue-600" : "bg-white/10")}
+                            >
+                               <div className={cn("absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all", brushOverwrite ? "right-0.5" : "left-0.5")} />
+                            </button>
+                          </div>
+                       </div>
+                    </section>
+
+                    {elements.find(e => e.id === selectedElement) && (
+                      <section className="pt-4 border-t border-white/5 space-y-3">
+                        <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Selection</h3>
+                        <div className="p-3 rounded-lg bg-white/5 border border-white/5 space-y-3">
+                           <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded shadow-inner" style={{ backgroundColor: elements.find(e => e.id === selectedElement)!.color }} />
+                              <div className="min-w-0">
+                                 <div className="text-[11px] font-bold truncate">{elements.find(e => e.id === selectedElement)!.name}</div>
+                                 <div className="text-[9px] text-white/40 font-mono">{(elements.find(e => e.id === selectedElement)!.category || '---').toUpperCase()}</div>
+                              </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => setIsEditorOpen(true)} className="py-1.5 bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/30">Edit</button>
+                              <button 
+                                onClick={() => {
+                                  const base = elements.find(e => e.id === selectedElement)!;
+                                  const clone = { ...base, id: 'custom-' + Date.now(), name: base.name + ' (Copy)' };
+                                  setEditingElement(clone);
+                                  setIsEditorOpen(true);
+                                }} 
+                                className="py-1.5 bg-white/5 text-white/60 text-[9px] font-bold uppercase rounded border border-white/10 hover:bg-white/10"
+                              >Clone</button>
+                           </div>
+                           {(selectedElement === 'wifi' || selectedElement === 'sensor') && (
+                              <button onClick={() => setShowProps(true)} className="w-full py-1.5 bg-orange-600/20 text-orange-400 text-[9px] font-bold uppercase rounded border border-orange-500/20">Config Props</button>
+                           )}
+                        </div>
+                      </section>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1046,7 +1219,7 @@ export default function App() {
                </div>
             </div>
 
-            <div className="absolute right-16 bottom-20 pointer-events-none flex flex-col gap-2 items-end">
+            <div className="absolute right-4 bottom-24 sm:right-16 sm:bottom-20 pointer-events-none flex flex-col gap-2 items-end">
                 {/* Element Properties Access Button */}
                 {(selectedElement === 'wifi' || selectedElement === 'sensor' || elements.find(e => e.id === selectedElement)?.category === 'sensors') && (
                   <button onClick={() => setShowProps(true)} className="px-4 py-2 bg-blue-600 rounded-lg text-[10px] font-bold uppercase pointer-events-auto border border-blue-400 shadow-lg mb-2 flex items-center gap-2 hover:bg-blue-500 transition-all">
@@ -1054,17 +1227,20 @@ export default function App() {
                   </button>
                 )}
 
-                <div className="bg-black/60 backdrop-blur-md p-2 rounded border border-white/5 flex flex-col gap-2 pointer-events-auto shadow-xl">
+                <div className="bg-black/80 backdrop-blur-md p-2 rounded border border-white/20 flex flex-col gap-2 pointer-events-auto shadow-xl">
                    {isMagnifierActive && (
                      <div className="flex gap-1 border-b border-white/10 pb-2 mb-1">
                         {[2, 4, 8].map(m => (
-                          <button key={m} onClick={() => setMagnifierScale(m)} className={cn("w-7 h-7 rounded text-[10px] font-bold transition-all", magnifierScale === m ? "bg-blue-600" : "hover:bg-white/5 text-white/40")}>{m}x</button>
+                          <button key={m} onClick={() => setMagnifierScale(m)} className={cn("w-7 h-7 rounded text-[10px] font-bold transition-all", magnifierScale === m ? "bg-blue-600 text-white" : "hover:bg-white/5 text-white/40")}>{m}x</button>
                         ))}
                      </div>
                    )}
-                   <div className="flex gap-2 items-center">
-                     <input type="range" min="1" max="50" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-24 accent-blue-500 cursor-pointer h-1" />
-                     <span className="text-[10px] font-mono text-white/60 min-w-[30px]">{brushSize}px</span>
+                   <div className="flex gap-3 items-center px-1">
+                     <div className="flex flex-col">
+                        <span className="text-[8px] text-white/40 uppercase font-bold leading-none mb-1">Brush</span>
+                        <input type="range" min="1" max="50" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-28 accent-blue-500 cursor-pointer h-1" />
+                     </div>
+                     <span className="text-[10px] font-mono text-white/60 min-w-[30px] bg-white/5 px-1.5 py-0.5 rounded border border-white/5">{brushSize}px</span>
                    </div>
                 </div>
                 
@@ -1202,15 +1378,27 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
               <p className="text-xs text-white/40">Define physical properties and chemical reactions</p>
            </div>
            <div className="flex items-center gap-4">
-              <select 
-                className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs"
-                onChange={(e) => cloneFrom(e.target.value)}
-                defaultValue=""
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-bold text-white/30 hidden sm:block">Template:</span>
+                <select 
+                  className="bg-[#2a2a2a] border border-white/20 rounded-lg p-2 text-xs text-white outline-none focus:ring-1 focus:ring-blue-500 min-w-[160px]"
+                  onChange={(e) => cloneFrom(e.target.value)}
+                  defaultValue=""
+                >
+                  <option value="" disabled className="bg-[#1a1a1a]">Clone from existing...</option>
+                  {elements.map(el => (
+                    <option key={el.id} value={el.id} className="bg-[#1a1a1a] text-white py-1">
+                      {el.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-red-500/20 text-white/40 hover:text-red-500 rounded-full transition-all"
               >
-                <option value="" disabled>Clone from existing...</option>
-                {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
-              </select>
-              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full"><Trash2 size={18} /></button>
+                <Trash2 size={18} />
+              </button>
            </div>
         </div>
         
