@@ -36,7 +36,9 @@ import {
   Heart,
   Star,
   Hammer,
-  Square
+  Square,
+  FileJson,
+  Edit
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1437,6 +1439,7 @@ function EditorToggle({ label, value, onChange }: { label: string, value: boolea
 // --- Element Editor Component ---
 
 function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { elements: ElementProperties[], tempUnit: 'K' | 'C' | 'F', onClose: () => void, onAdd: (el: ElementProperties) => void, initialData?: Partial<ElementProperties> }) {
+  const [showJson, setShowJson] = useState(false);
   const [formData, setFormData] = useState<Partial<ElementProperties>>({
     name: 'New Element',
     abbreviation: '',
@@ -1519,6 +1522,17 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
               <p className="text-xs text-white/40">Modify properties and reaction matrices</p>
            </div>
            <div className="flex items-center gap-4">
+              <button 
+                type="button"
+                onClick={() => setShowJson(!showJson)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] uppercase font-bold transition-all",
+                  showJson ? "bg-blue-600 text-white" : "bg-white/5 text-white/40 hover:bg-white/10"
+                )}
+              >
+                {showJson ? <Edit size={14} /> : <FileJson size={14} />}
+                {showJson ? "Edit Form" : "View JSON"}
+              </button>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase font-bold text-white/30 hidden sm:block">Template:</span>
                 <select 
@@ -1543,8 +1557,37 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
            </div>
         </div>
         
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Basic Properties */}
+        {showJson ? (
+          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4">
+             <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400">Raw Element Data</h3>
+                <span className="text-[10px] text-white/20 italic">Manual edits here will sync with the form</span>
+             </div>
+             <textarea 
+                className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-[11px] text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/20 resize-none scrollbar-hide"
+                value={JSON.stringify(formData, null, 2)}
+                onChange={(e) => {
+                   try {
+                      const parsed = JSON.parse(e.target.value);
+                      setFormData(parsed);
+                   } catch(err) {
+                      // Silently fail or simple border red?
+                   }
+                }}
+             />
+             <div className="pt-6 border-t border-white/5">
+                <button 
+                    onClick={handleSubmit}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 group"
+                >
+                    <Zap size={20} className="group-hover:animate-pulse" />
+                    Forge Element Definition
+                </button>
+              </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Basic Properties */}
           <div className="space-y-6">
             <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400 border-b border-blue-400/20 pb-2">Basic Identity</h3>
             
@@ -1879,6 +1922,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
              </button>
           </div>
         </form>
+        )}
       </motion.div>
     </motion.div>
   );
