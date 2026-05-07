@@ -24,7 +24,19 @@ import {
   LogOut,
   User as UserIcon,
   CloudUpload,
-  Globe
+  Globe,
+  Grid3X3,
+  Droplets,
+  Wind,
+  Box,
+  Bomb,
+  Radio,
+  Eye,
+  MoveUp,
+  Heart,
+  Star,
+  Hammer,
+  Square
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -50,7 +62,23 @@ const parseTemp = (val: string): number => {
   return num;
 };
 
-// --- Components ---
+const CATEGORIES = [
+  { id: 'walls', name: 'Walls', icon: Square },
+  { id: 'electronics', name: 'Electronics', icon: Zap },
+  { id: 'powered', name: 'Powered Materials', icon: Zap },
+  { id: 'powders', name: 'Powders', icon: Grid3X3 },
+  { id: 'liquids', name: 'Liquids', icon: Droplets },
+  { id: 'gases', name: 'Gasses', icon: Wind },
+  { id: 'solids', name: 'Solids', icon: Box },
+  { id: 'explosives', name: 'Explosives', icon: Bomb },
+  { id: 'radioactive', name: 'Radioactive', icon: Radio },
+  { id: 'sensors', name: 'Sensors', icon: Eye },
+  { id: 'force', name: 'Force', icon: MoveUp },
+  { id: 'life', name: 'Life', icon: Heart },
+  { id: 'special', name: 'Special', icon: Star },
+  { id: 'tools', name: 'Tools', icon: Hammer },
+  { id: 'custom', name: 'Custom', icon: UserIcon },
+];
 
 const TemperatureInput = ({ 
   value, 
@@ -183,6 +211,29 @@ export default function App() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<'elements' | 'deco' | 'props'>('elements');
   const [selectedDecoColor, setSelectedDecoColor] = useState<string>('#ffffff');
   const [user, setUser] = useState<User | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('powders');
+  const [hudLayout, setHudLayout] = useState<'modern' | 'classic'>('classic');
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const [isBottomBarHovered, setIsBottomBarHovered] = useState(false);
+  const [sidebarPosition, setSidebarPosition] = useState<'left' | 'right'>('right');
+  const [isMagnifierActive, setIsMagnifierActive] = useState(false);
+  const [magnifierScale, setMagnifierScale] = useState(4);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showProps, setShowProps] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setViewTransform({ scale: 1, x: 0, y: 0 });
+    }
+  }, [isMobile]);
 
   const saveToHistory = () => {
     if (!engineRef.current) return;
@@ -227,6 +278,9 @@ export default function App() {
            }
         }
       } else {
+        if (e.key === 'z') {
+           setIsMagnifierActive(prev => !prev);
+        }
         if (e.key === 'b') {
           setActiveSidebarTab('deco');
         }
@@ -421,6 +475,27 @@ export default function App() {
   const isPainting = useRef(false);
   const handlePointer = (e: React.PointerEvent) => {
     if (!canvasRef.current || !engineRef.current) return;
+
+    if (e.type === 'pointerdown') {
+      // Middle click (4) or Ctrl+Left click (1 + ctrlKey) for Panning
+      if (e.buttons === 4 || (e.buttons === 1 && e.ctrlKey) || e.shiftKey) {
+        setIsPanning(true);
+        return;
+      }
+      saveToHistory();
+    }
+    
+    if (isPanning) {
+      if (!isMobile) {
+        setViewTransform(prev => ({
+          ...prev,
+          x: prev.x + e.movementX,
+          y: prev.y + e.movementY
+        }));
+      }
+      return;
+    }
+
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = rect.width / GRID_WIDTH;
     const scaleY = rect.height / GRID_HEIGHT;
@@ -428,23 +503,6 @@ export default function App() {
     const y = Math.floor((e.clientY - rect.top) / scaleY);
 
     if (isPainting.current || e.type === 'pointerdown') {
-      if (e.type === 'pointerdown') {
-        if (e.button === 1 || e.shiftKey) {
-          setIsPanning(true);
-          return;
-        }
-        saveToHistory();
-      }
-      
-      if (isPanning) {
-        setViewTransform(prev => ({
-          ...prev,
-          x: prev.x + e.movementX,
-          y: prev.y + e.movementY
-        }));
-        return;
-      }
-
       isPainting.current = true;
       const elProp = elements.find(e => e.id === selectedElement);
       
@@ -486,6 +544,7 @@ export default function App() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    if (isMobile) return;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     setViewTransform(prev => ({
       ...prev,
@@ -500,6 +559,107 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-white/20 flex flex-col">
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
+            >
+              <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h2 className="text-xs font-bold uppercase tracking-widest">Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="text-white/40 hover:text-white"><Plus className="rotate-45" size={20} /></button>
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="space-y-4">
+                   <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-widest">UI Layout</h3>
+                   <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setHudLayout('classic')} className={cn("py-2 rounded border text-[10px] uppercase font-bold", hudLayout === 'classic' ? "bg-white/20 border-white/20" : "bg-white/5 border-white/5 text-white/40")}>Classic</button>
+                      <button onClick={() => setHudLayout('modern')} className={cn("py-2 rounded border text-[10px] uppercase font-bold", hudLayout === 'modern' ? "bg-white/20 border-white/20" : "bg-white/5 border-white/5 text-white/40")}>Modern</button>
+                   </div>
+                </div>
+                {hudLayout === 'classic' && (
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Sidebar Position</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setSidebarPosition('left')} className={cn("py-2 rounded border text-[10px] uppercase font-bold", sidebarPosition === 'left' ? "bg-white/20 border-white/20" : "bg-white/5 border-white/5 text-white/40")}>Left</button>
+                         <button onClick={() => setSidebarPosition('right')} className={cn("py-2 rounded border text-[10px] uppercase font-bold", sidebarPosition === 'right' ? "bg-white/20 border-white/20" : "bg-white/5 border-white/5 text-white/40")}>Right</button>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-4">
+                   <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Temperature Unit</h3>
+                   <div className="grid grid-cols-3 gap-2">
+                      {['C', 'F', 'K'].map(u => (
+                        <button key={u} onClick={() => setTempUnit(u as any)} className={cn("py-2 rounded border text-[10px] uppercase font-bold", tempUnit === u ? "bg-white/20 border-white/20" : "bg-white/5 border-white/5 text-white/40")}>{u}</button>
+                      ))}
+                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Properties Modal */}
+      <AnimatePresence>
+        {showProps && elements.find(e => e.id === selectedElement) && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
+            >
+              <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h2 className="text-xs font-bold uppercase tracking-widest">Element Properties</h2>
+                <button onClick={() => setShowProps(false)} className="text-white/40 hover:text-white"><Plus className="rotate-45" size={20} /></button>
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
+                   <div className="w-12 h-12 rounded shadow-inner" style={{ backgroundColor: elements.find(e => e.id === selectedElement)!.color }} />
+                   <div>
+                      <div className="text-sm font-bold">{elements.find(e => e.id === selectedElement)!.name}</div>
+                      <div className="text-[10px] text-white/40 uppercase font-mono">{selectedElement}</div>
+                   </div>
+                </div>
+
+                {selectedElement === 'wifi' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">WiFi Channel (0-65000)</label>
+                    <input 
+                      type="number"
+                      value={wifiChannel}
+                      onChange={(e) => setWifiChannel(Math.max(0, Math.min(65000, parseInt(e.target.value) || 0)))}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white font-mono"
+                    />
+                  </div>
+                )}
+
+                {(selectedElement === 'sensor' || elements.find(e => e.id === selectedElement)?.category === 'sensors') && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Detection Temp (°C)</label>
+                    <input 
+                      type="number"
+                      value={detectionThreshold}
+                      onChange={(e) => setDetectionThreshold(parseInt(e.target.value) || 0)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white font-mono"
+                    />
+                  </div>
+                )}
+
+                <button onClick={() => { setIsEditorOpen(true); setShowProps(false); }} className="w-full py-3 bg-blue-600 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all">
+                  Open Engine Editor
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Top HUD Bar */}
       <div className="h-6 bg-black/40 border-b border-white/5 flex items-center px-6 gap-6 overflow-hidden shrink-0">
         <div className="flex items-center gap-2">
@@ -632,377 +792,293 @@ export default function App() {
               color="#3b82f6" 
             />
           )}
+
+          <div className="h-4 w-[1px] bg-white/10" />
+          <ToolbarButton 
+            icon={Settings2} 
+            label="Settings"
+            onClick={() => setShowSettings(true)} 
+            active={showSettings}
+          />
         </div>
       </header>
 
-      <main className="flex flex-col h-[calc(100vh-88px)] lg:h-[calc(100vh-64px)] lg:flex-row overflow-hidden portrait:flex-row landscape:flex-col-reverse">
-        {/* Sidebar: Elements, Deco, Properties */}
-        <aside className={cn(
-          "bg-[#0f0f0f] border-white/10 flex flex-col shrink-0 transition-all",
-          "portrait:w-20 portrait:border-r portrait:h-full sm:portrait:w-48 md:portrait:w-64",
-          "landscape:w-full landscape:h-40 landscape:border-t",
-          "lg:w-72 lg:h-full lg:border-r lg:border-t-0"
-        )}>
-          {/* Tab Selection */}
-          <div className="flex border-b border-white/10 overflow-x-auto scrollbar-hide">
-            <button 
-              onClick={() => setActiveSidebarTab('elements')}
+      <main className={cn(
+        "flex flex-col lg:flex-row overflow-hidden portrait:flex-row landscape:flex-col-reverse relative flex-1 min-h-0",
+        hudLayout === 'classic' ? "bg-black" : ""
+      )}>
+        {hudLayout === 'modern' ? (
+          <>
+            <aside 
+              onMouseEnter={() => setIsSidebarHovered(true)}
+              onMouseLeave={() => setIsSidebarHovered(false)}
               className={cn(
-                "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap",
-                activeSidebarTab === 'elements' ? "bg-white/5 text-blue-400 border-b-2 border-blue-500" : "text-white/40 hover:text-white/60"
+                "bg-[#0f0f0f] border-white/10 flex flex-col shrink-0 transition-all duration-300 z-50",
+                "portrait:w-20 portrait:border-r portrait:h-full sm:portrait:w-48 md:portrait:w-64",
+                "landscape:w-full landscape:h-40 landscape:border-t",
+                "lg:w-72 lg:h-full lg:border-r lg:border-t-0"
               )}
-            >Elements</button>
-            <button 
-              onClick={() => setActiveSidebarTab('deco')}
-              className={cn(
-                "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap",
-                activeSidebarTab === 'deco' ? "bg-white/5 text-pink-400 border-b-2 border-pink-500" : "text-white/40 hover:text-white/60"
-              )}
-            >Deco</button>
-            <button 
-              onClick={() => setActiveSidebarTab('props')}
-              className={cn(
-                "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap xl:hidden",
-                activeSidebarTab === 'props' ? "bg-white/5 text-orange-400 border-b-2 border-orange-500" : "text-white/40 hover:text-white/60"
-              )}
-            >Properties</button>
-          </div>
-
-          <div className="p-2 sm:p-4 flex-1 overflow-auto space-y-6 custom-scrollbar">
-            {activeSidebarTab === 'elements' ? (
-              <>
-                {/* Search */}
-                <div className="relative hidden sm:block">
-                  <Search className="absolute left-2.5 top-2.5 text-white/20" size={14} />
-                  <input 
-                    type="text"
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-[10px] sm:text-xs focus:border-blue-500/50 outline-none transition-all"
-                  />
-                </div>
-
-                {/* Element Grid grouped by Category */}
-                <section className="space-y-4">
-                  {['walls', 'electronics', 'sensors', 'force', 'powders', 'liquids', 'gases', 'solids', 'explosives', 'radioactive', 'life', 'special', 'custom'].map(cat => {
-                const catElements = elements.filter(el => 
-                  el.category === cat && 
-                  (el.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                   el.id.toLowerCase().includes(searchQuery.toLowerCase()))
-                );
-                
-                if (catElements.length === 0) return null;
-
-                return (
-                  <div key={cat} className="space-y-1.5">
-                    <h3 className="text-[8px] sm:text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] flex items-center gap-2">
-                       {cat}
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-1.5">
-                      {catElements.map((el) => (
-                        <button
-                          key={el.id}
-                          onClick={() => setSelectedElement(el.id)}
-                          className={cn(
-                            "group relative flex items-center gap-1.5 p-1 sm:p-1.5 rounded border border-white/5 transition-all text-left overflow-hidden min-h-[28px]",
-                            selectedElement === el.id 
-                              ? "bg-white/10 border-blue-500/30" 
-                              : "hover:bg-white/5"
-                          )}
-                        >
-                          <div 
-                            className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-xs shrink-0" 
-                            style={{ backgroundColor: el.color }}
-                          />
-                          <span className="text-[8px] sm:text-[10px] font-medium truncate flex-1 leading-tight">{el.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              
-              <button 
-                 onClick={() => setIsEditorOpen(true)}
-                 className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all text-[10px] font-medium"
-              >
-                 <Plus size={12} /> New Element
-              </button>
-            </section>
-          </>
-        ) : activeSidebarTab === 'deco' ? (
-          <section className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="text-[9px] font-bold text-white/40 uppercase tracking-widest leading-none block">Color</h3>
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
-                {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080', '#008000', '#808080', '#444444'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setSelectedDecoColor(color)}
-                    className={cn(
-                      "w-full aspect-square rounded border border-white/10 transition-transform active:scale-95",
-                      selectedDecoColor === color ? "ring-1 ring-blue-500" : ""
-                    )}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+            >
+              <div className="flex border-b border-white/10 overflow-x-auto scrollbar-hide">
+                <button 
+                  onClick={() => setActiveSidebarTab('elements')}
+                  className={cn(
+                    "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap",
+                    activeSidebarTab === 'elements' ? "bg-white/5 text-blue-400 border-b-2 border-blue-500" : "text-white/40 hover:text-white/60"
+                  )}
+                >Elements</button>
+                <button 
+                  onClick={() => setActiveSidebarTab('deco')}
+                  className={cn(
+                    "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap",
+                    activeSidebarTab === 'deco' ? "bg-white/5 text-pink-400 border-b-2 border-pink-500" : "text-white/40 hover:text-white/60"
+                  )}
+                >Deco</button>
               </div>
-            </div>
-          </section>
-        ) : (
-          <section className="space-y-4">
-               {(() => {
-                const el = elements.find(e => e.id === selectedElement);
-                if (!el) return <p className="text-[10px] text-white/40 italic text-center py-8">Select an element to view and edit its properties.</p>;
-                return (
-                  <div className="space-y-6">
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                        <div className="flex items-center gap-2 mb-3">
-                           <div className="w-8 h-8 rounded-lg shadow-inner" style={{ backgroundColor: el.color }} />
-                           <div className="flex-1 min-w-0">
-                              <div className="text-[10px] font-bold truncate tracking-tight">{el.name}</div>
-                              <div className="text-[8px] text-white/40 uppercase font-mono">{el.id}</div>
-                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 overflow-hidden">
-                           <PropertyStat label="Density" value={el.density} unit="" />
-                           <PropertyStat label="BP" value={el.boilingPoint} unit="K" />
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-2 mt-3 pt-3 border-t border-white/5">
-                            <button 
-                              onClick={() => { setEditingElement(el); setIsEditorOpen(true); }}
-                              className="w-full flex items-center justify-center gap-2 p-1.5 rounded-lg bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase transition-all"
-                            >
-                                <Settings2 size={10} /> Edit Base
-                            </button>
-                        </div>
-                    </div>
 
-                    <div className="space-y-4 pt-4 border-t border-white/5">
-                      <div className="space-y-4">
-                        <h4 className="text-[9px] font-bold text-white/20 uppercase tracking-widest">Active Tools</h4>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-white/60">Overwrite</span>
-                          <button 
-                            onClick={() => setBrushOverwrite(!brushOverwrite)}
-                            className={cn(
-                              "w-7 h-3.5 rounded-full transition-colors relative",
-                              brushOverwrite ? "bg-blue-600" : "bg-white/10"
-                            )}
-                          >
-                            <div className={cn(
-                              "absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all",
-                              brushOverwrite ? "right-0.5" : "left-0.5"
-                            )} />
-                          </button>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between text-[9px] font-mono text-white/40">
-                            <span>Brush Size</span>
-                            <span>{brushSize}px</span>
-                          </div>
-                          <input 
-                            type="range" min="1" max="50" value={brushSize} 
-                            onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                            className="w-full accent-blue-500 h-1.5"
-                          />
-                        </div>
-                      </div>
-
-                      {/* WiFi Channel */}
-                      {selectedElement === 'wifi' && (
-                        <div className="space-y-1.5 p-2 bg-pink-500/5 rounded border border-pink-500/10">
-                          <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest">WiFi Channel</label>
-                          <input 
-                            type="number"
-                            value={wifiChannel}
-                            onChange={(e) => setWifiChannel(parseInt(e.target.value) || 0)}
-                            className="w-full bg-black/40 border border-white/5 rounded p-1 text-[10px] font-mono text-pink-400 outline-none"
-                          />
-                        </div>
-                      )}
-
-                      {/* Vision Modes for Mobile */}
-                      <div className="space-y-2">
-                        <h4 className="text-[9px] font-bold text-white/20 uppercase tracking-widest">Vision Mode</h4>
-                        <div className="grid grid-cols-2 gap-1.5">
-                           {[ViewMode.NORMAL, ViewMode.HEAT, ViewMode.PRESSURE].map(v => (
-                             <button
-                                key={v}
-                                onClick={() => setViewMode(v)}
+              <div className="p-2 sm:p-4 flex-1 overflow-auto space-y-6 custom-scrollbar">
+                {activeSidebarTab === 'elements' && (
+                  <section className="space-y-4">
+                    {CATEGORIES.map(cat => {
+                      const catElements = elements.filter(el => {
+                        if (cat.id === 'custom') return el.id.startsWith('custom-');
+                        return el.category === cat.id && !el.id.startsWith('custom-');
+                      }).filter(el => el.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                      if (catElements.length === 0) return null;
+                      return (
+                        <div key={cat.id} className="space-y-1.5">
+                          <h3 className="text-[8px] sm:text-[9px] font-bold text-white/20 uppercase tracking-[0.2em]">{cat.name}</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {catElements.map(el => (
+                              <button
+                                key={el.id}
+                                onClick={() => setSelectedElement(el.id)}
                                 className={cn(
-                                  "py-1 text-[8px] font-bold uppercase rounded border transition-all",
-                                  viewMode === v ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/5 text-white/40"
+                                  "flex items-center gap-1.5 p-1.5 rounded border border-white/5 transition-all",
+                                  selectedElement === el.id ? "bg-white/10 border-blue-500/30" : "hover:bg-white/5"
                                 )}
-                             >{v}</button>
-                           ))}
+                              >
+                                <div className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: el.color }} />
+                                <span className="text-[10px] truncate leading-tight">{el.name}</span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })}
+                  </section>
+                )}
+                {activeSidebarTab === 'deco' && (
+                  <div className="grid grid-cols-6 gap-2">
+                    {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500'].map(c => (
+                      <button key={c} onClick={() => setSelectedDecoColor(c)} className="aspect-square rounded border border-white/10" style={{ backgroundColor: c }} />
+                    ))}
                   </div>
-                );
-              })()}
-          </section>
-        )}
-      </div>
-        </aside>
+                )}
+              </div>
+            </aside>
 
-        {/* Viewport */}
-        <div 
-          className="flex-1 bg-[#050505] relative flex items-center justify-center p-2 sm:p-8 overflow-hidden"
-          onWheel={handleWheel}
-        >
-          <div 
-            className="relative shadow-2xl shadow-black/50 border border-white/5 rounded-sm overflow-hidden w-full h-full max-w-full max-h-full flex items-center justify-center"
-          >
-             <canvas
-                ref={canvasRef}
-                width={GRID_WIDTH}
-                height={GRID_HEIGHT}
-                onPointerDown={handlePointer}
-                onPointerMove={(e) => {
-                  mousePos.current = { x: e.clientX, y: e.clientY };
-                  handlePointer(e);
-                }}
-                onPointerUp={stopPainting}
-                onPointerLeave={stopPainting}
-                className="cursor-crosshair touch-none bg-black max-w-full max-h-full object-contain"
-                style={{ 
-                  imageRendering: 'pixelated',
-                  transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
-                  transition: (isPanning || isPainting.current) ? 'none' : 'transform 0.1s ease-out'
-                }}
-             />
-          </div>
-          
-          {/* HUD Overlay */}
-          <div className="absolute top-4 left-4 sm:top-12 sm:left-12 pointer-events-none hidden sm:block">
-             <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                   <span className="text-[10px] font-mono text-green-500">SIMULATION_READY</span>
-                </div>
-                <div className="text-[24px] font-mono font-bold text-white opacity-20">00000.00</div>
-             </div>
-          </div>
-        </div>
+            <div className="flex-1 relative bg-[#050505] overflow-hidden">
+               <canvas ref={canvasRef} width={GRID_WIDTH} height={GRID_HEIGHT} onPointerDown={handlePointer} onPointerMove={handlePointer} onPointerUp={stopPainting} onPointerLeave={stopPainting} onWheel={handleWheel} className="w-full h-full object-contain image-pixelated cursor-crosshair" />
+            </div>
 
-        {/* Right Panel: Properties & Settings (Desktop only) */}
-        <aside className="w-80 border-l border-white/10 bg-[#0f0f0f] hidden xl:flex flex-col overflow-y-auto custom-scrollbar">
-           <div className="p-4 space-y-6">
-              <section className="space-y-4">
-                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Brush Settings</h2>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/60">Overwrite Mode</span>
-                  <button 
-                    onClick={() => setBrushOverwrite(!brushOverwrite)}
-                    className={cn(
-                      "w-8 h-4 rounded-full transition-colors relative",
-                      brushOverwrite ? "bg-blue-600" : "bg-white/10"
-                    )}
-                  >
-                    <div className={cn(
-                      "absolute top-1 w-2 h-2 rounded-full bg-white transition-all",
-                      brushOverwrite ? "right-1" : "left-1"
-                    )} />
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-mono text-white/40">
-                    <span>Brush Size</span>
-                    <span>{brushSize}px</span>
-                  </div>
-                  <input 
-                    type="range" min="1" max="50" value={brushSize} 
-                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                    className="w-full accent-blue-500 cursor-pointer h-1.5"
-                  />
-                </div>
-              </section>
-
-              {/* Dynamic Element Properties */}
-              <section className="pt-6 border-t border-white/5">
-                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">Properties</h2>
-                {(() => {
-                  const el = elements.find(e => e.id === selectedElement);
-                  if (!el) return null;
-                  return (
-                    <div className="space-y-4">
-                      <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                          <div className="flex items-center gap-3 mb-4">
-                             <div className="w-10 h-10 rounded-lg shadow-inner" style={{ backgroundColor: el.color }} />
-                             <div>
-                                <div className="text-sm font-bold">{el.name}</div>
-                                <div className="text-[10px] text-white/40 uppercase font-mono">{el.id}</div>
-                             </div>
-                          </div>
-                          
-                          {selectedElement === 'wifi' && (
-                            <div className="mb-4 space-y-2 p-3 bg-pink-500/5 rounded-lg border border-pink-500/10">
-                              <label className="text-[10px] font-bold text-pink-400/60 uppercase">Wi-Fi Channel</label>
-                              <input 
-                                type="number"
-                                value={wifiChannel}
-                                onChange={(e) => setWifiChannel(parseInt(e.target.value) || 0)}
-                                className="w-full bg-black/40 border border-white/5 rounded px-2 py-1.5 text-xs font-mono text-pink-400 outline-none"
-                              />
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-2 gap-4">
-                             <PropertyStat label="Density" value={el.density} unit="kg/m³" />
-                             <PropertyStat label="Status" value={el.state} unit="" />
-                             <PropertyStat label="BP" value={el.boilingPoint} unit="K" />
-                             <PropertyStat label="Cond" value={(el.conductivity * 100).toFixed(0)} unit="%" />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
-                             <button 
-                               onClick={() => { setEditingElement(el); setIsEditorOpen(true); }}
-                               className="flex items-center justify-center gap-2 p-2 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-all text-[10px] font-bold uppercase"
-                             >
-                                <Settings2 size={12} /> Edit
-                             </button>
-                             <button 
-                               onClick={() => {
-                                  const clone = { ...el, id: 'custom-' + Date.now(), name: el.name + ' (Copy)' };
-                                  setEditingElement(clone);
-                                  setIsEditorOpen(true);
-                               }}
-                               className="flex items-center justify-center gap-2 p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all text-[10px] font-bold uppercase"
-                             >
-                                <Plus size={12} /> Clone
-                             </button>
-                          </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </section>
-
-              <section className="pt-6 border-t border-white/5">
-                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">View Modes</h2>
-                <div className="grid grid-cols-2 gap-2">
-                  {[ViewMode.NORMAL, ViewMode.HEAT, ViewMode.PRESSURE, ViewMode.LIFE].map(mode => (
+            <aside className="w-80 border-l border-white/10 bg-[#0f0f0f] hidden xl:flex flex-col p-4 overflow-auto custom-scrollbar">
+               <h2 className="text-[10px] uppercase font-bold text-white/40 tracking-widest mb-4">Properties</h2>
+               {elements.find(e => e.id === selectedElement) && (
+                 <div className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4">
+                   <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 rounded shadow-inner" style={{ backgroundColor: elements.find(e => e.id === selectedElement)!.color }} />
+                     <div className="text-sm font-bold">{elements.find(e => e.id === selectedElement)!.name}</div>
+                   </div>
+                   <button onClick={() => setIsEditorOpen(true)} className="w-full py-2 bg-blue-600/20 text-blue-400 rounded-lg text-xs font-bold uppercase">Edit Base</button>
+                 </div>
+               )}
+            </aside>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col relative overflow-hidden">
+            <div className="flex-1 relative bg-black flex">
+              {/* Left Sidebar if position is left */}
+              {sidebarPosition === 'left' && (
+                <div 
+                  onMouseEnter={() => setIsSidebarHovered(true)} 
+                  onMouseLeave={() => setIsSidebarHovered(false)} 
+                  className={cn(
+                    "w-12 border-r border-white/10 bg-[#0f0f0f] flex flex-col items-center py-2 gap-1 transition-all duration-300 z-50 overflow-y-auto custom-scrollbar shrink-0",
+                    !isSidebarHovered && "opacity-40 grayscale"
+                  )}
+                >
+                  {CATEGORIES.map(cat => (
                     <button 
-                      key={mode}
-                      onClick={() => setViewMode(mode)}
+                      key={cat.id} 
+                      onClick={() => setSelectedCategory(cat.id)} 
                       className={cn(
-                        "text-[9px] py-2 rounded border transition-all uppercase font-bold", 
-                        viewMode === mode ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
+                        "w-10 h-10 flex items-center justify-center rounded transition-all",
+                        selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
                       )}
-                    >{mode}</button>
+                    >
+                      <cat.icon size={18} />
+                    </button>
                   ))}
                 </div>
-              </section>
-           </div>
-        </aside>
+              )}
+
+              <div className="flex-1 relative overflow-hidden bg-black flex items-center justify-center" onWheel={handleWheel}>
+                <canvas 
+                  ref={canvasRef} 
+                  width={GRID_WIDTH} 
+                  height={GRID_HEIGHT} 
+                  onPointerDown={handlePointer} 
+                  onPointerMove={(e) => { mousePos.current = { x: e.clientX, y: e.clientY }; handlePointer(e); }} 
+                  onPointerUp={stopPainting} 
+                  onPointerLeave={stopPainting} 
+                  className="w-full h-full object-contain cursor-crosshair touch-none border-2 border-white/20"
+                  style={{ imageRendering: 'pixelated', transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})` }}
+                />
+
+                {/* Magnifier Preview Tool */}
+                {isMagnifierActive && (
+                  <div 
+                    className="absolute z-[150] pointer-events-none border-2 border-blue-500 shadow-2xl rounded-sm overflow-hidden bg-black"
+                    style={{
+                      left: mousePos.current.x - (isMobile ? 0 : 200),
+                      top: mousePos.current.y - (isMobile ? 150 : 200),
+                      width: 150,
+                      height: 150,
+                      display: (mousePos.current.x < 0) ? 'none' : 'block'
+                    }}
+                  >
+                    <div className="absolute top-0 right-0 bg-blue-600 text-[8px] font-bold px-1 py-0.5">{magnifierScale}x</div>
+                    <canvas 
+                       width={150} height={150}
+                       ref={(el) => {
+                         if (!el || !canvasRef.current || !isMagnifierActive) return;
+                         const ctx = el.getContext('2d');
+                         if (!ctx) return;
+                         const rect = canvasRef.current.getBoundingClientRect();
+                         const sx = (mousePos.current.x - rect.left) * (GRID_WIDTH / rect.width);
+                         const sy = (mousePos.current.y - rect.top) * (GRID_HEIGHT / rect.height);
+                         ctx.imageSmoothingEnabled = false;
+                         ctx.clearRect(0, 0, 150, 150);
+                         const size = 150 / magnifierScale;
+                         ctx.drawImage(canvasRef.current, sx - size/2, sy - size/2, size, size, 0, 0, 150, 150);
+                         // Center crosshair
+                         ctx.strokeStyle = 'white';
+                         ctx.lineWidth = 0.5;
+                         ctx.beginPath();
+                         ctx.moveTo(75, 70); ctx.lineTo(75, 80);
+                         ctx.moveTo(70, 75); ctx.lineTo(80, 75);
+                         ctx.stroke();
+                       }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Sidebar - Categories */}
+              {sidebarPosition === 'right' && (
+                <div 
+                  onMouseEnter={() => setIsSidebarHovered(true)} 
+                  onMouseLeave={() => setIsSidebarHovered(false)} 
+                  className={cn(
+                    "w-12 border-l border-white/10 bg-[#0f0f0f] flex flex-col items-center py-2 gap-1 transition-all duration-300 z-50 overflow-y-auto custom-scrollbar shrink-0",
+                    !isSidebarHovered && "opacity-40 grayscale"
+                  )}
+                >
+                  {CATEGORIES.map(cat => (
+                    <button 
+                      key={cat.id} 
+                      onClick={() => setSelectedCategory(cat.id)} 
+                      className={cn(
+                        "w-10 h-10 flex items-center justify-center rounded transition-all",
+                        selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
+                      )}
+                    >
+                      <cat.icon size={18} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Drawer - Elements */}
+            <div 
+              onMouseEnter={() => setIsBottomBarHovered(true)} 
+              onMouseLeave={() => setIsBottomBarHovered(false)}
+              className={cn(
+                "h-16 border-t border-white/10 bg-[#0f0f0f] flex items-center px-4 gap-2 transition-all duration-300 z-50 overflow-x-auto scrollbar-hide shrink-0",
+                !isBottomBarHovered && !isSidebarHovered && "opacity-40 grayscale"
+              )}
+            >
+              {elements.filter(el => {
+                if (selectedCategory === 'custom') return el.id.startsWith('custom-');
+                return el.category === selectedCategory && !el.id.startsWith('custom-');
+              }).map(el => (
+                <button
+                  key={el.id}
+                  onClick={() => setSelectedElement(el.id)}
+                  className={cn(
+                    "px-3 h-10 rounded text-[9px] font-bold uppercase tracking-widest border transition-all flex flex-col items-center justify-center min-w-[70px] shrink-0",
+                    selectedElement === el.id ? "bg-white text-black border-white" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
+                  )}
+                >
+                  <span className="truncate w-full text-center">{el.name}</span>
+                  <div className="w-full h-1 mt-1 rounded-full opacity-50" style={{ backgroundColor: el.color }} />
+                </button>
+              ))}
+              {selectedCategory === 'custom' && (
+                <button onClick={() => setIsEditorOpen(true)} className="w-10 h-10 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 hover:text-white shrink-0">
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* HUD Overlays */}
+            <div className="absolute top-4 left-4 pointer-events-none flex flex-col gap-1">
+               <div className="flex gap-4 text-[9px] font-mono text-white/40 bg-black/40 backdrop-blur-sm px-2 py-1 rounded border border-white/5">
+                  <span>FPS: <span className="text-white">{fps}</span></span>
+                  {hoverData && (
+                    <>
+                      <span className="text-blue-400 font-bold">{hoverData.abbr}</span>
+                      <span>{formatTempHUD(hoverData.tempK)}</span>
+                    </>
+                  )}
+               </div>
+            </div>
+
+            <div className="absolute right-16 bottom-20 pointer-events-none flex flex-col gap-2 items-end">
+                {/* Element Properties Access Button */}
+                {(selectedElement === 'wifi' || selectedElement === 'sensor' || elements.find(e => e.id === selectedElement)?.category === 'sensors') && (
+                  <button onClick={() => setShowProps(true)} className="px-4 py-2 bg-blue-600 rounded-lg text-[10px] font-bold uppercase pointer-events-auto border border-blue-400 shadow-lg mb-2 flex items-center gap-2 hover:bg-blue-500 transition-all">
+                    <Settings2 size={12} /> Properties
+                  </button>
+                )}
+
+                <div className="bg-black/60 backdrop-blur-md p-2 rounded border border-white/5 flex flex-col gap-2 pointer-events-auto shadow-xl">
+                   {isMagnifierActive && (
+                     <div className="flex gap-1 border-b border-white/10 pb-2 mb-1">
+                        {[2, 4, 8].map(m => (
+                          <button key={m} onClick={() => setMagnifierScale(m)} className={cn("w-7 h-7 rounded text-[10px] font-bold transition-all", magnifierScale === m ? "bg-blue-600" : "hover:bg-white/5 text-white/40")}>{m}x</button>
+                        ))}
+                     </div>
+                   )}
+                   <div className="flex gap-2 items-center">
+                     <input type="range" min="1" max="50" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-24 accent-blue-500 cursor-pointer h-1" />
+                     <span className="text-[10px] font-mono text-white/60 min-w-[30px]">{brushSize}px</span>
+                   </div>
+                </div>
+                
+                <div className="flex gap-2">
+                   <button onClick={() => setIsMagnifierActive(!isMagnifierActive)} className={cn("w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border pointer-events-auto shadow-lg transition-all", isMagnifierActive ? "bg-blue-600 border-blue-400 text-white" : "bg-white/10 border-white/10 text-white/60")}>
+                      <Search size={18} />
+                   </button>
+                   <button onClick={() => setIsPaused(!isPaused)} className={cn("w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border pointer-events-auto shadow-lg", isPaused ? "bg-orange-500/20 border-orange-500/50 text-orange-500" : "bg-white/10 border-white/10 text-white/60")}>
+                      {isPaused ? <Play size={18} /> : <Pause size={18} />}
+                   </button>
+                </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Editor Modal Overlay */}
@@ -1168,12 +1244,15 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Category</label>
-                  <input 
-                    type="text" 
+                  <select 
                     value={formData.category} 
                     onChange={e => setFormData({...formData, category: e.target.value})}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
-                  />
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg p-2 text-sm text-white"
+                  >
+                    {CATEGORIES.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
                </div>
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Color</label>
