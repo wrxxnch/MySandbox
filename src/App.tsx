@@ -217,6 +217,7 @@ export default function App() {
   const [isBottomBarHovered, setIsBottomBarHovered] = useState(false);
   const [sidebarPosition, setSidebarPosition] = useState<'left' | 'right'>('right');
   const [isMagnifierActive, setIsMagnifierActive] = useState(false);
+  const [isZPressed, setIsZPressed] = useState(false);
   const [fixedMagnifierPos, setFixedMagnifierPos] = useState<{x: number, y: number} | null>(null);
   const [magnifierScale, setMagnifierScale] = useState(4);
   const [showSettings, setShowSettings] = useState(false);
@@ -264,6 +265,8 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+      
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'z') {
            e.preventDefault();
@@ -279,16 +282,31 @@ export default function App() {
            }
         }
       } else {
-        if (e.key === 'z') {
-           setIsMagnifierActive(prev => !prev);
+        if (e.key.toLowerCase() === 'z') {
+           setIsZPressed(true);
+           if (!e.repeat) {
+             setIsMagnifierActive(prev => !prev);
+             stopPainting();
+           }
         }
         if (e.key === 'b') {
           setActiveSidebarTab('deco');
         }
       }
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'z') {
+        setIsZPressed(false);
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [history, historyIndex]);
 
   useEffect(() => {
@@ -565,8 +583,8 @@ export default function App() {
   const handleWheel = (e: React.WheelEvent) => {
     if (isMobile) return;
     
-    if (e.ctrlKey) {
-      // Zoom with Ctrl + Wheel
+    if (e.ctrlKey || isZPressed) {
+      // Zoom with Ctrl + Wheel or Z + Wheel
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       setViewTransform(prev => ({
         ...prev,
@@ -1057,6 +1075,8 @@ export default function App() {
                        width={150} height={150}
                        onPointerDown={handlePointer}
                        onPointerMove={handlePointer}
+                       onPointerUp={stopPainting}
+                       onPointerLeave={stopPainting}
                        className="pointer-events-auto cursor-crosshair"
                        ref={(el) => {
                          if (!el || !canvasRef.current || !isMagnifierActive) return;
@@ -1245,7 +1265,7 @@ export default function App() {
                 </div>
                 
                 <div className="flex gap-2">
-                   <button onClick={() => setIsMagnifierActive(!isMagnifierActive)} className={cn("w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border pointer-events-auto shadow-lg transition-all", isMagnifierActive ? "bg-blue-600 border-blue-400 text-white" : "bg-white/10 border-white/10 text-white/60")}>
+                   <button onClick={() => { setIsMagnifierActive(!isMagnifierActive); stopPainting(); }} className={cn("w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border pointer-events-auto shadow-lg transition-all", isMagnifierActive ? "bg-blue-600 border-blue-400 text-white" : "bg-white/10 border-white/10 text-white/60")}>
                       <Search size={18} />
                    </button>
                    <button onClick={() => setIsPaused(!isPaused)} className={cn("w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border pointer-events-auto shadow-lg", isPaused ? "bg-orange-500/20 border-orange-500/50 text-orange-500" : "bg-white/10 border-white/10 text-white/60")}>
