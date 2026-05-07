@@ -1158,6 +1158,6 @@
     "category": "solids",
     "reactions": [],
     "abbreviation": "COPR",
-    "baseTemperature": 20
+    "baseTemperature": 295.15
   }
 ]
