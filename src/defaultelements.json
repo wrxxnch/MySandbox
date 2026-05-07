@@ -772,22 +772,22 @@
     "category": "gases",
     "reactions": []
   },
-  {
-    "id": "fire",
-    "name": "Fire",
-    "color": "#FF4500",
-    "state": "gas",
-    "density": 0.05,
-    "acidity": 7,
-    "boilingPoint": 10000,
-    "freezingPoint": 300,
-    "conductivity": 0.1,
-    "thermalConductivity": 0.8,
-    "baseTemperature": 673,
-    "isExplosive": false,
-    "category": "gases",
-    "reactions": []
-  },
+{
+  "id": "fire",
+  "name": "Fire",
+  "color": "#FF4500",
+  "state": "gas",
+  "density": 0.05,
+  "acidity": 7,
+  "boilingPoint": 10000,
+  "freezingPoint": 300,
+  "conductivity": 0.1,
+  "thermalConductivity": 0.8,
+  "baseTemperature": 673,
+  "isExplosive": false,
+  "category": "gases",
+  "reactions": []
+},
   {
     "id": "ice",
     "name": "Ice",
