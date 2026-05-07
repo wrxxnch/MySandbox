@@ -630,8 +630,13 @@
         "chance": 0.1,
         "transformIntoId": "custom-1778126106181",
         "producesElementId": "empty"
+      },
+      {
+        "targetElementId": "custom-1778126106181",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778126106181",
+        "producesElementId": "custom-1778126106181"
       }
-
     ]
   },
   {
