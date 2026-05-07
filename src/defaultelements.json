@@ -636,6 +636,12 @@
         "chance": 0.1,
         "transformIntoId": "custom-1778126106181",
         "producesElementId": "custom-1778126106181"
+      },
+      {
+        "targetElementId": "acid",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778127955087",
+        "producesElementId": "custom-1778127955087"
       }
     ]
   },
@@ -686,6 +692,36 @@
     "isExplosive": false,
     "category": "liquids",
     "reactions": []
+  },
+  {
+    "id": "custom-1778127955087",
+    "name": "Caustic Gas",
+    "color": "#ADFF2F",
+    "state": "gas",
+    "density": 3,
+    "acidity": 1,
+    "boilingPoint": 226.85,
+    "freezingPoint": 200,
+    "conductivity": 0.5,
+    "thermalConductivity": 0.1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [
+      {
+        "targetElementId": "gold",
+        "chance": 0.1,
+        "transformIntoId": "stone",
+        "isExclude": true,
+        "producesElementId": "empty"
+      },
+      {
+        "targetElementId": "glass",
+        "chance": 0.1,
+        "transformIntoId": "stone",
+        "isExclude": true
+      }
+    ],
+    "abbreviation": "Caus"
   },
   {
     "id": "steam",
