@@ -623,7 +623,15 @@
     "thermalConductivity": 0.2,
     "isExplosive": false,
     "category": "liquids",
-    "reactions": []
+    "reactions": [
+      {
+        "targetElementId": "salt",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778126106181",
+        "producesElementId": "empty"
+      }
+
+    ]
   },
   {
     "id": "oil",
