@@ -11,7 +11,9 @@ export interface ElementReaction {
   chance: number; // 0 to 1
   transformIntoId: string; // What the current element becomes
   producesElementId?: string; // What the target element becomes (optional)
-  requiredTemp?: number;
+  extraSpawnIds?: string[]; // Extra elements to spawn in nearby empty space
+  minTemp?: number;
+  maxTemp?: number;
   requiredAcidity?: number;
 }
 
@@ -42,6 +44,9 @@ export interface ElementProperties {
   isIndestructible?: boolean;
   baseTemperature?: number; // In Kelvin
   isParticleLife?: boolean; // If this element handles particle life logic
+  flatColor?: boolean;
+  glow?: boolean;
+  isRadiant?: boolean;
 }
 
 export interface Particle {

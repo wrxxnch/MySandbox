@@ -447,6 +447,23 @@ export class SimulationEngine {
     const idx = y * this.width + x;
     const currentTemp = this.tempGrid[idx];
 
+    // Special Flags logic
+    if (element.isSource) {
+      this.nextLifeGrid[idx] = 4; // Constant electricity
+    }
+    
+    if (element.isRadiant) {
+       // Radiate heat to neighbors
+       const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+       for (const [dx, dy] of neighbors) {
+         const nx = x + dx; const ny = y + dy;
+         if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+           const nIdx = ny * this.width + nx;
+           this.nextTempGrid[nIdx] = Math.min(this.nextTempGrid[nIdx] + 5, 2000);
+         }
+       }
+    }
+
     // State Transitions
     if (element.boilingPoint > 0 && currentTemp >= element.boilingPoint && element.vaporElementId) {
        let targetIdx = this.elementList.findIndex(e => e.id === element.vaporElementId);
@@ -512,7 +529,7 @@ export class SimulationEngine {
     // CLONE logic
     if (element.id === 'clne') {
       let ctype = this.ctypeGrid[idx];
-      if (ctype === 0) {
+      if (ctype === 0 && !element.isIndestructible) { // Usually special elements are indestructible, but let's use a new flag if needed
         // Learn from neighbors
         const nbs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
         for (const [dx, dy] of nbs) {
@@ -705,6 +722,10 @@ export class SimulationEngine {
               const finalMatch = reaction.isExclude ? !isMatch : isMatch;
 
               if (finalMatch) {
+                 // Check Temperature Thresholds
+                 if (reaction.minTemp !== undefined && currentTemp < reaction.minTemp) continue;
+                 if (reaction.maxTemp !== undefined && currentTemp > reaction.maxTemp) continue;
+
                  if (Math.random() < reaction.chance) {
                     const transIdx = this.elementList.findIndex(e => e.id === reaction.transformIntoId);
                     if (transIdx >= 0) this.nextGrid[idx] = transIdx;
@@ -712,6 +733,33 @@ export class SimulationEngine {
                     if (reaction.producesElementId) {
                        const prodIdx = this.elementList.findIndex(e => e.id === reaction.producesElementId);
                        if (prodIdx >= 0) this.nextGrid[nIdx] = prodIdx;
+                    }
+
+                    if (reaction.extraSpawnIds && reaction.extraSpawnIds.length > 0) {
+                       const spawnNbs = [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+                       // Shuffle neighbors
+                       for (let i = spawnNbs.length - 1; i > 0; i--) {
+                           const j = Math.floor(Math.random() * (i + 1));
+                           [spawnNbs[i], spawnNbs[j]] = [spawnNbs[j], spawnNbs[i]];
+                       }
+                       
+                       let currentSpawnIdx = 0;
+                       for (const [sdx, sdy] of spawnNbs) {
+                          if (currentSpawnIdx >= reaction.extraSpawnIds.length) break;
+                          const sx = x + sdx;
+                          const sy = y + sdy;
+                          if (sx >= 0 && sx < this.width && sy >= 0 && sy < this.height) {
+                             const sIdx = sy * this.width + sx;
+                             if (this.grid[sIdx] === 0 && this.nextGrid[sIdx] === 0) {
+                                const elId = reaction.extraSpawnIds[currentSpawnIdx];
+                                const elIdx = this.elementList.findIndex(e => e.id === elId);
+                                if (elIdx >= 0) {
+                                   this.nextGrid[sIdx] = elIdx;
+                                   currentSpawnIdx++;
+                                }
+                             }
+                          }
+                       }
                     }
                  }
               }
@@ -740,6 +788,7 @@ export class SimulationEngine {
   private handleFalling(x: number, y: number, elIdx: number) {
     if (y >= this.height - 1) return;
 
+    const el = this.elementList[elIdx];
     const below = (y + 1) * this.width + x;
     const belowLeft = (y + 1) * this.width + (x - 1);
     const belowRight = (y + 1) * this.width + (x + 1);
@@ -750,103 +799,152 @@ export class SimulationEngine {
       this.movePixel(x, y, x - 1, y + 1, elIdx);
     } else if (x < this.width - 1 && this.grid[belowRight] === 0) {
       this.movePixel(x, y, x + 1, y + 1, elIdx);
+    } else if (Math.random() < 0.2) {
+      // Density sinking through liquids/gases
+      const targetElIdx = this.grid[below];
+      const targetEl = this.elementList[targetElIdx];
+      if (targetEl && targetEl.density < el.density && (targetEl.state === PhysicalState.LIQUID || targetEl.state === PhysicalState.GAS)) {
+        this.swapPixels(x, y, x, y + 1);
+      }
     }
   }
 
   private handleLiquid(x: number, y: number, elIdx: number) {
-    if (y >= this.height - 1) return;
-
-    const below = (y + 1) * this.width + x;
+    const el = this.elementList[elIdx];
+    const canFall = y < this.height - 1;
+    const below = canFall ? (y + 1) * this.width + x : -1;
     
     // 1. Can fall straight down?
-    if (this.grid[below] === 0) {
+    if (canFall && this.grid[below] === 0) {
       this.movePixel(x, y, x, y + 1, elIdx);
       return;
     }
 
-    // 2. Can fall diagonally?
-    const dir = Math.random() > 0.5 ? 1 : -1;
-    const belowSide = (y + 1) * this.width + (x + dir);
-    if (x + dir >= 0 && x + dir < this.width && this.grid[belowSide] === 0) {
-      this.movePixel(x, y, x + dir, y + 1, elIdx);
-      return;
-    }
-    
-    const belowOtherSide = (y + 1) * this.width + (x - dir);
-    if (x - dir >= 0 && x - dir < this.width && this.grid[belowOtherSide] === 0) {
-      this.movePixel(x, y, x - dir, y + 1, elIdx);
-      return;
+    // 2. Density sinking
+    if (canFall) {
+      const targetBelowIdx = this.grid[below];
+      const targetBelow = this.elementList[targetBelowIdx];
+      if (targetBelow && targetBelow.density < el.density && (targetBelow.state === PhysicalState.LIQUID || targetBelow.state === PhysicalState.GAS)) {
+        this.swapPixels(x, y, x, y + 1);
+        return;
+      }
     }
 
-    // 3. Lateral spread (High Fluidity) - Leveling out aggressively
-    const spreadRange = 25; 
-    let leftTarget = -1;
-    let rightTarget = -1;
-
-    for (let i = 1; i <= spreadRange; i++) {
-        const lx = x - i;
-        if (lx < 0) break;
-        const targetIdx = y * this.width + lx;
-        const belowTargetIdx = (y + 1) * this.width + lx;
-
-        if (this.grid[targetIdx] === 0 && this.nextGrid[targetIdx] === 0) {
-            leftTarget = lx;
-            // Immediate priority if there is a hole below
-            if (y < this.height - 1 && this.grid[belowTargetIdx] === 0) {
-                break;
-            }
-        } else if (this.grid[targetIdx] !== 0) {
-            // Cannot pass through other particles
-            break;
+    // 3. Can flow diagonally downwards?
+    if (canFall) {
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      const targetsY = [dir, -dir];
+      for (const d of targetsY) {
+        const tx = x + d;
+        const ty = y + 1;
+        if (tx >= 0 && tx < this.width) {
+          const nIdx = ty * this.width + tx;
+          if (this.grid[nIdx] === 0) {
+            this.movePixel(x, y, tx, ty, elIdx);
+            return;
+          }
         }
+      }
     }
 
-    for (let i = 1; i <= spreadRange; i++) {
-        const rx = x + i;
-        if (rx >= this.width) break;
-        const targetIdx = y * this.width + rx;
-        const belowTargetIdx = (y + 1) * this.width + rx;
-
-        if (this.grid[targetIdx] === 0 && this.nextGrid[targetIdx] === 0) {
-            rightTarget = rx;
-            if (y < this.height - 1 && this.grid[belowTargetIdx] === 0) {
-                break;
-            }
-        } else if (this.grid[targetIdx] !== 0) {
-            break;
+    // 4. Randomized Horizontal Flow (Works on floor too!)
+    const hDir = Math.random() > 0.5 ? 1 : -1;
+    const hTargets = [hDir, -hDir];
+    for(const d of hTargets) {
+      const tx = x + d;
+      if (tx >= 0 && tx < this.width) {
+        const nIdx = y * this.width + tx;
+        if (this.grid[nIdx] === 0) {
+          this.movePixel(x, y, tx, y, elIdx);
+          return;
         }
-    }
-
-    if (leftTarget !== -1 && rightTarget !== -1) {
-        const targetX = Math.random() > 0.5 ? leftTarget : rightTarget;
-        this.movePixel(x, y, targetX, y, elIdx);
-    } else if (leftTarget !== -1) {
-        this.movePixel(x, y, leftTarget, y, elIdx);
-    } else if (rightTarget !== -1) {
-        this.movePixel(x, y, rightTarget, y, elIdx);
+        // Lateral density swap (heavier liquid pushes aside lighter one)
+        const nEl = this.elementList[this.grid[nIdx]];
+        if (nEl && nEl.state === PhysicalState.LIQUID && nEl.density < el.density) {
+          if (Math.random() < 0.1) {
+            this.swapPixels(x, y, tx, y);
+            return;
+          }
+        }
+      }
     }
   }
 
   private handleGas(x: number, y: number, elIdx: number) {
-    if (y <= 0) {
+    const el = this.elementList[elIdx];
+    const isLight = el.density < 0.05; // Gases generally rise unless very dense
+    const dirY = isLight ? -1 : 1;
+    
+    if (y <= 0 && isLight) {
       this.setPixelToAir(x, y);
       return;
     }
+    if (y >= this.height - 1 && !isLight) {
+       return; // Heavy gas rests on floor
+    }
 
-    const above = (y - 1) * this.width + x;
-    const dir = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
-    const targetX = x + dir;
-    const targetIdx = (y - 1) * this.width + targetX;
+    const targets = [
+      [0, dirY],           
+      [Math.random() > 0.5 ? 1 : -1, dirY], 
+      [Math.random() > 0.5 ? -1 : 1, dirY], 
+      [Math.random() > 0.5 ? 1 : -1, 0],    
+    ];
 
-    if (targetX >= 0 && targetX < this.width) {
-      const targetIdx = (y - 1) * this.width + targetX;
-      const targetEl = this.elementList[this.grid[targetIdx]];
+    for (const [dx, dy] of targets) {
+      const tx = x + dx;
+      const ty = y + dy;
+      if (tx < 0 || tx >= this.width || ty < 0 || ty >= this.height) continue;
       
-      // Move to air OR swap with liquid (bubbles rising)
-      if (this.grid[targetIdx] === 0 || (targetEl && targetEl.state === PhysicalState.LIQUID)) {
-        this.movePixel(x, y, targetX, y - 1, elIdx);
+      const nIdx = ty * this.width + tx;
+      const nElIdx = this.grid[nIdx];
+      
+      if (nElIdx === 0) {
+        this.movePixel(x, y, tx, ty, elIdx);
+        return;
+      } else {
+        const nEl = this.elementList[nElIdx];
+        if (nEl && (nEl.state === PhysicalState.LIQUID || nEl.state === PhysicalState.GAS)) {
+           if (isLight && nEl.density > el.density) {
+              if (Math.random() < 0.4) {
+                 this.swapPixels(x, y, tx, ty);
+                 return;
+              }
+           } else if (!isLight && nEl.density < el.density) {
+              if (Math.random() < 0.4) {
+                this.swapPixels(x, y, tx, ty);
+                return;
+             }
+           }
+        }
       }
     }
+  }
+
+  private swapPixels(x1: number, y1: number, x2: number, y2: number) {
+    const idx1 = y1 * this.width + x1;
+    const idx2 = y2 * this.width + x2;
+
+    const el1 = this.grid[idx1];
+    const el2 = this.grid[idx2];
+    
+    this.nextGrid[idx1] = el2;
+    this.nextGrid[idx2] = el1;
+
+    // Swap related properties
+    const temp1 = this.tempGrid[idx1];
+    const temp2 = this.tempGrid[idx2];
+    this.nextTempGrid[idx1] = temp2;
+    this.nextTempGrid[idx2] = temp1;
+
+    const life1 = this.lifeGrid[idx1];
+    const life2 = this.lifeGrid[idx2];
+    this.nextLifeGrid[idx1] = life2;
+    this.nextLifeGrid[idx2] = life1;
+
+    const ctype1 = this.ctypeGrid[idx1];
+    const ctype2 = this.ctypeGrid[idx2];
+    this.nextCtypeGrid[idx1] = ctype2;
+    this.nextCtypeGrid[idx2] = ctype1;
   }
 
   private movePixel(oldX: number, oldY: number, newX: number, newY: number, elIdx: number) {
@@ -975,6 +1073,13 @@ export class SimulationEngine {
   public render(ctx: CanvasRenderingContext2D) {
     for (let i = 0; i < this.grid.length; i++) {
         const elIdx = this.grid[i];
+
+        // Optimization: Skip empty pixels (Air) if NORMAL view
+        if (elIdx === 0 && this.viewMode === ViewMode.NORMAL) {
+          this.buffer[i] = 0x00000000;
+          continue;
+        }
+
         const element = this.elementList[elIdx];
         const color = element.color;
         const life = this.lifeGrid[i];
@@ -982,6 +1087,15 @@ export class SimulationEngine {
         const pressure = this.pressureGrid[i];
         
         let finalColor = color;
+
+        if (element.flatColor) {
+           finalColor = color;
+        } else if (this.viewMode === ViewMode.NORMAL) {
+           // Normal variation
+           const hash = (i * 123456) % 100;
+           if (hash > 80) finalColor = this.lerpColor(color, '#ffffff', 0.05);
+           else if (hash < 20) finalColor = this.lerpColor(color, '#000000', 0.05);
+        }
 
         // Decoration overlay
         if (this.showDecoration && this.decoGrid[i] !== 0 && this.viewMode === ViewMode.NORMAL) {
@@ -1004,7 +1118,10 @@ export class SimulationEngine {
            }
         }
 
-        if (this.viewMode === ViewMode.HEAT) {
+        if (i % this.width === 0) {
+            // New row logic if needed, but ctx.fillRect is used below
+        }
+         if (this.viewMode === ViewMode.HEAT) {
             // Heat view: Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Pink (9700C+)
             const tempC = temp - 273.15;
             if (tempC < -100) finalColor = '#0000FF'; // Blue

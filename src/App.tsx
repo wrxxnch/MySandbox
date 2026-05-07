@@ -218,11 +218,20 @@ export default function App() {
   const [sidebarPosition, setSidebarPosition] = useState<'left' | 'right'>('right');
   const [isMagnifierActive, setIsMagnifierActive] = useState(false);
   const [isZPressed, setIsZPressed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [fixedMagnifierPos, setFixedMagnifierPos] = useState<{x: number, y: number} | null>(null);
   const [magnifierScale, setMagnifierScale] = useState(4);
   const [showSettings, setShowSettings] = useState(false);
   const [showProps, setShowProps] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  const deleteElement = (id: string) => {
+    if (BASE_ELEMENTS.some(e => e.id === id)) {
+      if (!window.confirm("This is a base element. Are you sure you want to delete it? It might break existing simulations.")) return;
+    }
+    setElements(prev => prev.filter(e => e.id !== id));
+    if (selectedElement === id) setSelectedElement('empty');
+  };
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -603,7 +612,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-white/20 flex flex-col">
+    <div className={cn(
+      "min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-white/20 flex flex-col transition-all",
+      isFullscreen && "fixed inset-0 z-[1000] overflow-hidden"
+    )}>
       {/* Settings Modal */}
       <AnimatePresence>
         {showSettings && (
@@ -705,148 +717,176 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Top HUD Bar */}
-      <div className="h-6 bg-black/40 border-b border-white/5 flex items-center px-6 gap-6 overflow-hidden shrink-0">
-        <div className="flex items-center gap-2">
-          <div className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-orange-500' : 'bg-green-500 animate-pulse'}`} />
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest leading-none">
-            {isPaused ? 'PAUSED' : 'RUNNING'}
-          </span>
-        </div>
-        
-        {hoverData ? (
-          <div className="flex items-center gap-4 text-[10px] font-mono whitespace-nowrap">
-            <span className="text-blue-400 font-bold">{hoverData.abbr}</span>
-            <span className="text-white/60">Temp: <span className="text-orange-400" onClick={() => setTempUnit(u => u === 'K' ? 'C' : u === 'C' ? 'F' : 'K')}>{formatTempHUD(hoverData.tempK)}</span></span>
-            <span className="text-white/60">Pressure: <span className="text-pink-400">{hoverData.pressure}</span></span>
-            <span className="text-white/60">CTYPE: <span className="text-cyan-400">{hoverData.ctype}</span></span>
-            <span className="text-white/60">#<span className="text-white/40">{hoverData.elIdx}</span></span>
-            <span className="text-white/60">X:<span className="text-white/80">{hoverData.x}</span> Y:<span className="text-white/80">{hoverData.y}</span></span>
+      {/* Top HUD Bar with Hero Panel */}
+      <div className="bg-black/60 border-b border-white/5 flex flex-col shrink-0">
+        <div className="h-6 flex items-center px-6 gap-6 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-orange-500' : 'bg-green-500 animate-pulse'}`} />
+            <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest leading-none">
+              {isPaused ? 'PAUSED' : 'RUNNING'}
+            </span>
           </div>
-        ) : (
-          <span className="text-[10px] font-mono text-white/20 italic uppercase tracking-wider">Hover canvas for particle data...</span>
-        )}
-
-        <div className="ml-auto flex items-center gap-4">
-           <div className="text-[9px] font-mono text-white/20 uppercase tracking-widest">{fps} FPS</div>
+          
+          <div className="ml-auto flex items-center gap-4">
+             <div className="text-[9px] font-mono text-white/20 uppercase tracking-widest">{fps} FPS</div>
+          </div>
         </div>
+
+        {/* Hero HUD Panel */}
+        <AnimatePresence mode="wait">
+          {hoverData && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 48, opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="px-6 border-t border-white/5 bg-gradient-to-r from-blue-500/5 to-transparent flex items-center gap-8 overflow-hidden"
+            >
+               <div className="flex items-center gap-3 pr-8 border-r border-white/10">
+                  <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center border border-white/10 group overflow-hidden">
+                     <span className="text-[10px] font-bold text-blue-400 group-hover:scale-125 transition-transform">{hoverData.abbr}</span>
+                  </div>
+                  <div>
+                     <div className="text-[11px] font-bold text-white uppercase tracking-wider">{hoverData.name}</div>
+                     <div className="text-[8px] text-white/30 font-mono">ID: {hoverData.id} | #{hoverData.elIdx}</div>
+                  </div>
+               </div>
+
+               <div className="flex gap-8">
+                  <PropertyStat label="TEMP" value={formatTempHUD(hoverData.tempK).split('°')[0]} unit={'°' + (tempUnit)} />
+                  <PropertyStat label="TYPE" value={hoverData.ctypeName} unit="" />
+                  <PropertyStat label="PRESSURE" value={hoverData.pressure} unit="atm" />
+                  <PropertyStat label="COORD" value={`${hoverData.x},${hoverData.y}`} unit="pos" />
+                  <PropertyStat label="LIFE" value={hoverData.life} unit="n" />
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Header */}
-      <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-[#0f0f0f]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <Binary size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight uppercase">PixelForge</h1>
-            <p className="text-[10px] text-white/40 uppercase tracking-widest">Advanced Particle Sandbox</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-[10px] font-mono text-white/40 bg-white/5 px-2 py-1 rounded">
-             {fps} FPS | {GRID_WIDTH}x{GRID_HEIGHT}
-          </div>
-          <div className="h-4 w-[1px] bg-white/10" />
-          
-          <ToolbarButton 
-            icon={Eraser} 
-            label="Eraser"
-            onClick={() => setSelectedElement('empty')} 
-            active={selectedElement === 'empty'}
-          />
-          
-          <div className="h-4 w-[1px] bg-white/10" />
-          
-          {user ? (
-            <div className="flex items-center gap-2">
-               <img src={user.photoURL || ''} className="w-6 h-6 rounded-full border border-white/10" alt="avatar" />
-               <button onClick={() => logout()} className="text-[10px] text-white/40 hover:text-white uppercase font-bold tracking-widest">Logout</button>
+      {!isFullscreen && (
+        <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-[#0f0f0f]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <Binary size={18} className="text-white" />
             </div>
-          ) : (
-            <button onClick={() => loginWithGoogle()} className="flex items-center gap-2 text-[10px] text-white/40 hover:text-white uppercase font-bold tracking-widest bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
-              <LogIn size={12} /> Login
-            </button>
-          )}
-
-          <div className="h-4 w-[1px] bg-white/10" />
-          <ToolbarButton 
-            icon={isPaused ? Play : Pause} 
-            label={isPaused ? "Play" : "Pause"}
-            onClick={() => setIsPaused(!isPaused)} 
-            active={!isPaused}
-          />
-          <ToolbarButton icon={Undo} label="Undo" onClick={undo} />
-          <ToolbarButton icon={Redo} label="Redo" onClick={redo} />
-          <ToolbarButton icon={Trash2} label="Clear" onClick={() => {
-              if (engineRef.current) engineRef.current.clear();
-          }} />
-          <div className="h-4 w-[1px] bg-white/10" />
-          
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            className="hidden" 
-            accept=".json" 
-            onChange={handleImport} 
-          />
-          <ToolbarButton icon={Upload} label="Import" onClick={() => fileInputRef.current?.click()} />
-          <div className="relative">
-            <ToolbarButton 
-              icon={Download} 
-              label="Export" 
-              active={showExportMenu}
-              onClick={() => setShowExportMenu(!showExportMenu)} 
-            />
-            <AnimatePresence>
-              {showExportMenu && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full mt-2 right-0 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-[100] w-56 flex flex-col gap-1 overflow-hidden"
-                >
-                  <div className="px-3 py-2 border-b border-white/5 mb-1">
-                    <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Select Mode</span>
-                  </div>
-                  <ExportOption 
-                    label="All Elements" 
-                    desc="Everything in the current set"
-                    onClick={() => { executeExport('1'); setShowExportMenu(false); }} 
-                  />
-                  <ExportOption 
-                    label="Custom Elements" 
-                    desc="Only items you created"
-                    onClick={() => { executeExport('2'); setShowExportMenu(false); }} 
-                  />
-                  <ExportOption 
-                    label="Base Elements" 
-                    desc="Original library properties"
-                    onClick={() => { executeExport('3'); setShowExportMenu(false); }} 
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div>
+              <h1 className="text-sm font-bold tracking-tight uppercase">PixelForge</h1>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest">Advanced Particle Sandbox</p>
+            </div>
           </div>
-          
-          {user && (
-            <ToolbarButton 
-              icon={CloudUpload} 
-              onClick={() => saveCustomElements(user.uid, elements)} 
-              color="#3b82f6" 
-            />
-          )}
 
-          <div className="h-4 w-[1px] bg-white/10" />
-          <ToolbarButton 
-            icon={Settings2} 
-            label="Settings"
-            onClick={() => setShowSettings(true)} 
-            active={showSettings}
-          />
-        </div>
-      </header>
+          <div className="flex items-center gap-4">
+            <div className="text-[10px] font-mono text-white/40 bg-white/5 px-2 py-1 rounded">
+               {fps} FPS | {GRID_WIDTH}x{GRID_HEIGHT}
+            </div>
+            <div className="h-4 w-[1px] bg-white/10" />
+            
+            <ToolbarButton 
+              icon={isFullscreen ? LogOut : LogIn} 
+              label={isFullscreen ? "Exit Full" : "Full View"}
+              onClick={() => setIsFullscreen(!isFullscreen)} 
+            />
+            <div className="h-4 w-[1px] bg-white/10" />
+            
+            <ToolbarButton 
+              icon={Eraser} 
+              label="Eraser"
+              onClick={() => setSelectedElement('empty')} 
+              active={selectedElement === 'empty'}
+            />
+            
+            <div className="h-4 w-[1px] bg-white/10" />
+            
+            {user ? (
+              <div className="flex items-center gap-2">
+                 <img src={user.photoURL || ''} className="w-6 h-6 rounded-full border border-white/10" alt="avatar" />
+                 <button onClick={() => logout()} className="text-[10px] text-white/40 hover:text-white uppercase font-bold tracking-widest">Logout</button>
+              </div>
+            ) : (
+              <button onClick={() => loginWithGoogle()} className="flex items-center gap-2 text-[10px] text-white/40 hover:text-white uppercase font-bold tracking-widest bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                <LogIn size={12} /> Login
+              </button>
+            )}
+
+            <div className="h-4 w-[1px] bg-white/10" />
+            <ToolbarButton 
+              icon={isPaused ? Play : Pause} 
+              label={isPaused ? "Play" : "Pause"}
+              onClick={() => setIsPaused(!isPaused)} 
+              active={!isPaused}
+            />
+            <ToolbarButton icon={Undo} label="Undo" onClick={undo} />
+            <ToolbarButton icon={Redo} label="Redo" onClick={redo} />
+            <ToolbarButton icon={Trash2} label="Clear" onClick={() => {
+                if (engineRef.current) engineRef.current.clear();
+            }} />
+            <div className="h-4 w-[1px] bg-white/10" />
+            
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              className="hidden" 
+              accept=".json" 
+              onChange={handleImport} 
+            />
+            <ToolbarButton icon={Upload} label="Import" onClick={() => fileInputRef.current?.click()} />
+            <div className="relative">
+              <ToolbarButton 
+                icon={Download} 
+                label="Export" 
+                active={showExportMenu}
+                onClick={() => setShowExportMenu(!showExportMenu)} 
+              />
+              <AnimatePresence>
+                {showExportMenu && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute top-full mt-2 right-0 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-[100] w-56 flex flex-col gap-1 overflow-hidden"
+                  >
+                    <div className="px-3 py-2 border-b border-white/5 mb-1">
+                      <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Select Mode</span>
+                    </div>
+                    <ExportOption 
+                      label="All Elements" 
+                      desc="Everything in the current set"
+                      onClick={() => { executeExport('1'); setShowExportMenu(false); }} 
+                    />
+                    <ExportOption 
+                      label="Custom Elements" 
+                      desc="Only items you created"
+                      onClick={() => { executeExport('2'); setShowExportMenu(false); }} 
+                    />
+                    <ExportOption 
+                      label="Base Elements" 
+                      desc="Original library properties"
+                      onClick={() => { executeExport('3'); setShowExportMenu(false); }} 
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            
+            {user && (
+              <ToolbarButton 
+                icon={CloudUpload} 
+                onClick={() => saveCustomElements(user.uid, elements)} 
+                color="#3b82f6" 
+              />
+            )}
+
+            <div className="h-4 w-[1px] bg-white/10" />
+            <ToolbarButton 
+              icon={Settings2} 
+              label="Settings"
+              onClick={() => setShowSettings(true)} 
+              active={showSettings}
+            />
+          </div>
+        </header>
+      )}
 
       <main className={cn(
         "flex flex-col lg:flex-row overflow-hidden portrait:flex-row landscape:flex-col-reverse relative flex-1 min-h-0",
@@ -886,8 +926,7 @@ export default function App() {
                   <section className="space-y-4">
                     {CATEGORIES.map(cat => {
                       const catElements = elements.filter(el => {
-                        if (cat.id === 'custom') return el.id.startsWith('custom-');
-                        return el.category === cat.id && !el.id.startsWith('custom-');
+                        return el.category === cat.id;
                       }).filter(el => el.name.toLowerCase().includes(searchQuery.toLowerCase()));
                       if (catElements.length === 0) return null;
                       return (
@@ -933,9 +972,20 @@ export default function App() {
                  <div className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-4">
                    <div className="flex items-center gap-3">
                      <div className="w-10 h-10 rounded shadow-inner" style={{ backgroundColor: elements.find(e => e.id === selectedElement)!.color }} />
-                     <div className="text-sm font-bold">{elements.find(e => e.id === selectedElement)!.name}</div>
+                     <div className="min-w-0">
+                        <div className="text-sm font-bold truncate">{elements.find(e => e.id === selectedElement)!.name}</div>
+                        <div className="text-[10px] text-white/40 font-mono">{(elements.find(e => e.id === selectedElement)!.category || '---').toUpperCase()}</div>
+                     </div>
                    </div>
-                   <button onClick={() => setIsEditorOpen(true)} className="w-full py-2 bg-blue-600/20 text-blue-400 rounded-lg text-xs font-bold uppercase">Edit Base</button>
+                   <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setIsEditorOpen(true)} className="py-2 bg-blue-600/20 text-blue-400 rounded-lg text-xs font-bold uppercase border border-blue-500/20">Edit Base</button>
+                      <button 
+                         onClick={() => deleteElement(selectedElement)}
+                         className="py-2 bg-red-600/10 text-red-400 rounded-lg text-xs font-bold uppercase border border-red-500/20 flex items-center justify-center gap-1"
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                   </div>
                  </div>
                )}
             </aside>
@@ -944,7 +994,7 @@ export default function App() {
           <div className="flex-1 flex flex-col relative overflow-hidden">
             <div className="flex-1 relative bg-black flex">
               {/* Left Sidebar enhancement */}
-              {sidebarPosition === 'left' && (
+              {!isFullscreen && sidebarPosition === 'left' && (
                 <div 
                   onMouseEnter={() => setIsSidebarHovered(true)} 
                   onMouseLeave={() => setIsSidebarHovered(false)} 
@@ -1009,7 +1059,13 @@ export default function App() {
                               </div>
                            </div>
                            <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => setIsEditorOpen(true)} className="py-1.5 bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/30">Edit</button>
+                              <button 
+                                onClick={() => {
+                                  setEditingElement(elements.find(e => e.id === selectedElement) || null);
+                                  setIsEditorOpen(true);
+                                }} 
+                                className="py-1.5 bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/30"
+                              >Edit</button>
                               <button 
                                 onClick={() => {
                                   const base = elements.find(e => e.id === selectedElement)!;
@@ -1019,6 +1075,14 @@ export default function App() {
                                 }} 
                                 className="py-1.5 bg-white/5 text-white/60 text-[9px] font-bold uppercase rounded border border-white/10 hover:bg-white/10"
                               >Clone</button>
+                           </div>
+                           <div className="grid grid-cols-1">
+                              <button 
+                                onClick={() => deleteElement(selectedElement)}
+                                className="py-1.5 bg-red-600/10 text-red-400 text-[9px] font-bold uppercase rounded border border-red-500/20 hover:bg-red-500/20 flex items-center justify-center gap-1"
+                              >
+                                <Trash2 size={10} /> Delete Element
+                              </button>
                            </div>
                            {(selectedElement === 'wifi' || selectedElement === 'sensor') && (
                               <button onClick={() => setShowProps(true)} className="w-full py-1.5 bg-orange-600/20 text-orange-400 text-[9px] font-bold uppercase rounded border border-orange-500/20">Config Props</button>
@@ -1031,6 +1095,14 @@ export default function App() {
               )}
 
               <div className="flex-1 relative overflow-hidden bg-black flex items-center justify-center" onWheel={handleWheel}>
+                {isFullscreen && (
+                  <button 
+                    onClick={() => setIsFullscreen(false)} 
+                    className="absolute top-4 right-4 z-[1001] w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-white/20 pointer-events-auto shadow-2xl"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                )}
                 <canvas 
                   ref={canvasRef} 
                   width={GRID_WIDTH} 
@@ -1107,7 +1179,7 @@ export default function App() {
               </div>
 
               {/* Right Sidebar enhancement */}
-              {sidebarPosition === 'right' && (
+              {!isFullscreen && sidebarPosition === 'right' && (
                 <div 
                   onMouseEnter={() => setIsSidebarHovered(true)} 
                   onMouseLeave={() => setIsSidebarHovered(false)} 
@@ -1172,7 +1244,13 @@ export default function App() {
                               </div>
                            </div>
                            <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => setIsEditorOpen(true)} className="py-1.5 bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/30">Edit</button>
+                              <button 
+                                onClick={() => {
+                                  setEditingElement(elements.find(e => e.id === selectedElement) || null);
+                                  setIsEditorOpen(true);
+                                }} 
+                                className="py-1.5 bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/30"
+                              >Edit</button>
                               <button 
                                 onClick={() => {
                                   const base = elements.find(e => e.id === selectedElement)!;
@@ -1182,6 +1260,14 @@ export default function App() {
                                 }} 
                                 className="py-1.5 bg-white/5 text-white/60 text-[9px] font-bold uppercase rounded border border-white/10 hover:bg-white/10"
                               >Clone</button>
+                           </div>
+                           <div className="grid grid-cols-1">
+                              <button 
+                                onClick={() => deleteElement(selectedElement)}
+                                className="py-1.5 bg-red-600/10 text-red-400 text-[9px] font-bold uppercase rounded border border-red-500/20 hover:bg-red-500/20 flex items-center justify-center gap-1"
+                              >
+                                <Trash2 size={10} /> Delete Element
+                              </button>
                            </div>
                            {(selectedElement === 'wifi' || selectedElement === 'sensor') && (
                               <button onClick={() => setShowProps(true)} className="w-full py-1.5 bg-orange-600/20 text-orange-400 text-[9px] font-bold uppercase rounded border border-orange-500/20">Config Props</button>
@@ -1200,12 +1286,11 @@ export default function App() {
               onMouseLeave={() => setIsBottomBarHovered(false)}
               className={cn(
                 "h-16 border-t border-white/10 bg-[#0f0f0f] flex items-center px-4 gap-2 transition-all duration-300 z-50 overflow-x-auto scrollbar-hide shrink-0",
-                !isBottomBarHovered && !isSidebarHovered && "opacity-40 grayscale"
+                !isBottomBarHovered && !isSidebarHovered && !isFullscreen && "opacity-40 grayscale"
               )}
             >
               {elements.filter(el => {
-                if (selectedCategory === 'custom') return el.id.startsWith('custom-');
-                return el.category === selectedCategory && !el.id.startsWith('custom-');
+                return el.category === selectedCategory;
               }).map(el => (
                 <button
                   key={el.id}
@@ -1219,11 +1304,15 @@ export default function App() {
                   <div className="w-full h-1 mt-1 rounded-full opacity-50" style={{ backgroundColor: el.color }} />
                 </button>
               ))}
-              {selectedCategory === 'custom' && (
-                <button onClick={() => setIsEditorOpen(true)} className="w-10 h-10 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 hover:text-white shrink-0">
-                  <Plus size={16} />
-                </button>
-              )}
+              <button 
+                onClick={() => {
+                  setEditingElement({ category: selectedCategory } as any);
+                  setIsEditorOpen(true);
+                }} 
+                className="w-10 h-10 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 hover:text-white shrink-0"
+              >
+                <Plus size={16} />
+              </button>
             </div>
 
             {/* HUD Overlays */}
@@ -1277,31 +1366,46 @@ export default function App() {
         )}
       </main>
 
-      {/* Editor Modal Overlay */}
-      <AnimatePresence>
-        {isEditorOpen && (
-          <ElementEditor 
-             elements={elements}
-             tempUnit={tempUnit}
-             onClose={() => {
-                setIsEditorOpen(false);
-                setEditingElement(null);
-             }} 
-             onAdd={(newEl) => {
-                setElements(prev => {
-                   const exists = prev.findIndex(e => e.id === newEl.id);
-                   if (exists >= 0) {
-                      const copy = [...prev];
-                      copy[exists] = newEl;
-                      return copy;
-                   }
-                   return [...prev, newEl];
-                });
-             }} 
-             initialData={editingElement || undefined}
-          />
-        )}
-      </AnimatePresence>
+              {/* Editor Modal Overlay */}
+              <AnimatePresence>
+                {isEditorOpen && (
+                  <ElementEditor 
+                     elements={elements}
+                     tempUnit={tempUnit}
+                     onClose={() => {
+                        setIsEditorOpen(false);
+                        setEditingElement(null);
+                     }} 
+                     onAdd={(newEl) => {
+                        setElements(prev => {
+                           const existsIdx = prev.findIndex(e => e.id === newEl.id);
+                           const isRename = prev.some((e, idx) => e.name === newEl.name && idx !== existsIdx);
+                           
+                           let finalEl = { ...newEl };
+                           if (isRename) {
+                             let count = 1;
+                             let newName = `${newEl.name} (new ${count})`;
+                             while (prev.some(e => e.name === newName)) {
+                               count++;
+                               newName = `${newEl.name} (new ${count})`;
+                             }
+                             finalEl.name = newName;
+                           }
+
+                           if (existsIdx >= 0) {
+                              const copy = [...prev];
+                              copy[existsIdx] = finalEl;
+                              return copy;
+                           }
+                           return [...prev, finalEl];
+                        });
+                        if (newEl.category) setSelectedCategory(newEl.category);
+                        setSelectedElement(newEl.id);
+                     }} 
+                     initialData={editingElement || undefined}
+                  />
+                )}
+              </AnimatePresence>
     </div>
   );
 }
@@ -1313,6 +1417,21 @@ function PropertyStat({ label, value, unit }: { label: string, value: any, unit:
       <div className="text-xs font-mono">{value}<span className="text-[10px] opacity-40 ml-0.5">{unit}</span></div>
     </div>
   )
+}
+
+function EditorToggle({ label, value, onChange }: { label: string, value: boolean, onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5">
+       <span className="text-[10px] text-white/40 uppercase font-bold">{label}</span>
+       <button 
+         type="button"
+         onClick={() => onChange(!value)}
+         className={cn("w-8 h-4 rounded-full relative transition-all", value ? "bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.4)]" : "bg-white/10")}
+       >
+          <div className={cn("absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all shadow-sm", value ? "left-[18px]" : "left-0.5")} />
+       </button>
+    </div>
+  );
 }
 
 // --- Element Editor Component ---
@@ -1337,7 +1456,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
     thermalConductivity: 0.1,
     ...initialData,
     // Ensure ID is unique if cloning
-    id: initialData?.id && !initialData.name?.includes('(Copy)') ? initialData.id : 'custom-' + Date.now()
+    id: initialData?.id || 'custom-' + Date.now()
   });
 
   const addReaction = () => {
@@ -1394,8 +1513,10 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#1a1a1a]">
            <div>
-              <h2 className="text-lg font-bold">Forge New Element</h2>
-              <p className="text-xs text-white/40">Define physical properties and chemical reactions</p>
+              <h2 className="text-lg font-bold text-blue-400">
+                {initialData?.id ? `Re-Forging: ${initialData.name}` : 'Forge New Element'}
+              </h2>
+              <p className="text-xs text-white/40">Modify properties and reaction matrices</p>
            </div>
            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -1632,7 +1753,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                 </select>
               </div>
             )}
-
+            
             <div className="flex items-center justify-between border-b border-green-400/20 pb-2 pt-2">
                <h3 className="text-xs font-bold uppercase tracking-widest text-green-400">Chemical Reactions</h3>
                <button type="button" onClick={addReaction} className="text-[10px] bg-green-500/10 text-green-400 px-2 py-1 rounded hover:bg-green-500/20 border border-green-500/20 flex items-center gap-1">
@@ -1649,27 +1770,14 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                    <div className="grid grid-cols-2 gap-3 pt-2">
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">If touches</label>
-                        <div className="flex gap-2 items-center">
-                          <select 
-                            value={reaction.targetElementId} 
-                            onChange={e => updateReaction(i, 'targetElementId', e.target.value)}
-                            className="flex-1 bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
-                          >
-                            {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
-                          </select>
-                          <button 
-                            type="button"
-                            onClick={() => updateReaction(i, 'isExclude', !reaction.isExclude)}
-                            className={`px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
-                              reaction.isExclude 
-                                ? 'bg-red-500/20 border-red-500/50 text-red-400' 
-                                : 'bg-white/5 border-white/10 text-white/40 grayscale hover:grayscale-0'
-                            }`}
-                            title="Invert Match (All except this element)"
-                          >
-                            EXCEPT
-                          </button>
-                        </div>
+                        <select 
+                          value={reaction.targetElementId} 
+                          onChange={e => updateReaction(i, 'targetElementId', e.target.value)}
+                          className="w-full bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
+                        >
+                          <option value="empty">Air (Empty)</option>
+                          {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
+                        </select>
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">Transforms to</label>
@@ -1678,6 +1786,8 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                           onChange={e => updateReaction(i, 'transformIntoId', e.target.value)}
                           className="w-full bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
                         >
+                          <option value="empty">Air (Empty)</option>
+                          <option value={formData.id}>[Self] {formData.name}</option>
                           {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
                         </select>
                       </div>
@@ -1698,8 +1808,28 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                           className="w-full bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
                         >
                           <option value="">No change</option>
+                          <option value="empty">Air (Empty)</option>
+                          <option value={formData.id}>[Self] {formData.name}</option>
                           {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
                         </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase font-bold text-white/20">Min Temp (K)</label>
+                        <input 
+                          type="number" placeholder="None"
+                          value={reaction.minTemp || ''} 
+                          onChange={e => updateReaction(i, 'minTemp', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase font-bold text-white/20">Max Temp (K)</label>
+                        <input 
+                          type="number" placeholder="None"
+                          value={reaction.maxTemp || ''} 
+                          onChange={e => updateReaction(i, 'maxTemp', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
+                        />
                       </div>
                    </div>
                 </div>
@@ -1707,6 +1837,35 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
               {(!formData.reactions || formData.reactions.length === 0) && (
                 <p className="text-[10px] text-center text-white/20 italic">No reactions defined.</p>
               )}
+            </div>
+
+            <h3 className="text-xs font-bold uppercase tracking-widest text-pink-400 border-b border-pink-400/20 pb-2 pt-4">Advanced Flags</h3>
+            <div className="grid grid-cols-2 gap-4 pb-8">
+                <EditorToggle 
+                   label="Indestructible" 
+                   value={formData.isIndestructible || false} 
+                   onChange={v => setFormData({...formData, isIndestructible: v})} 
+                 />
+                 <EditorToggle 
+                   label="Glow Effect" 
+                   value={formData.glow || false} 
+                   onChange={v => setFormData({...formData, glow: v})} 
+                 />
+                 <EditorToggle 
+                   label="Is Source (Battery)" 
+                   value={formData.isSource || false} 
+                   onChange={v => setFormData({...formData, isSource: v})} 
+                 />
+                 <EditorToggle 
+                   label="Flat Color" 
+                   value={formData.flatColor || false} 
+                   onChange={v => setFormData({...formData, flatColor: v})} 
+                 />
+                 <EditorToggle 
+                   label="Is Radiant" 
+                   value={formData.isRadiant || false} 
+                   onChange={v => setFormData({...formData, isRadiant: v})} 
+                 />
             </div>
           </div>
 
