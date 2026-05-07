@@ -179,11 +179,10 @@ export default function App() {
   const [particleFriction, setParticleFriction] = useState<number>(0.95);
   const [particleRadius, setParticleRadius] = useState<number>(80);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.NORMAL);
+  const [wifiChannel, setWifiChannel] = useState<number>(1);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'elements' | 'deco' | 'props'>('elements');
+  const [selectedDecoColor, setSelectedDecoColor] = useState<string>('#ffffff');
   const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    if (engineRef.current) engineRef.current.viewMode = viewMode;
-  }, [viewMode]);
 
   const saveToHistory = () => {
     if (!engineRef.current) return;
@@ -198,10 +197,7 @@ export default function App() {
   };
 
   const undo = () => {
-    if (historyIndex < 0 || !engineRef.current) return;
-    // If we are at the latest state, we might need to save current first to redo back to it?
-    // But standard implementation:
-    if (historyIndex === 0) return;
+    if (historyIndex <= 0 || !engineRef.current) return;
     const prevIdx = historyIndex - 1;
     engineRef.current.restoreSnapshot(history[prevIdx]);
     setHistoryIndex(prevIdx);
@@ -224,12 +220,25 @@ export default function App() {
         } else if (e.key === 'y') {
            e.preventDefault();
            redo();
+        } else if (e.key === 'b') {
+           e.preventDefault();
+           if (engineRef.current) {
+             engineRef.current.showDecoration = !engineRef.current.showDecoration;
+           }
+        }
+      } else {
+        if (e.key === 'b') {
+          setActiveSidebarTab('deco');
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [history, historyIndex]);
+
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.viewMode = viewMode;
+  }, [viewMode]);
 
   const formatTempHUD = (k: number) => formatTemp(k, tempUnit);
 
@@ -445,6 +454,11 @@ export default function App() {
               const nx = x + i;
               const ny = y + j;
 
+              if (activeSidebarTab === 'deco') {
+                engineRef.current!.setDeco(nx, ny, e.shiftKey ? null : selectedDecoColor);
+                continue;
+              }
+
               if (elProp?.isParticleLife) {
                  if (Math.random() < 0.2) {
                    engineRef.current!.spawnParticle(nx, ny, Math.floor(Math.random() * 6));
@@ -460,6 +474,9 @@ export default function App() {
               }
               if (elProp?.category === 'sensors') {
                  options.ctypeIdNum = detectionThreshold + 273.15; // Pass numeric ctype
+              }
+              if (selectedElement === 'wifi') {
+                 options.ctypeIdNum = wifiChannel;
               }
               engineRef.current!.setPixel(nx, ny, selectedElement, options);
            }
@@ -618,25 +635,57 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex h-[calc(100vh-64px)] overflow-hidden">
-        {/* Left Sidebar: Tools & Elements */}
-        <aside className="w-72 border-r border-white/10 bg-[#0f0f0f] flex flex-col shrink-0">
-          <div className="p-4 flex-1 overflow-auto space-y-6 custom-scrollbar">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 text-white/20" size={14} />
-              <input 
-                type="text"
-                placeholder="Search elements..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-xs focus:border-blue-500/50 outline-none transition-all"
-              />
-            </div>
+      <main className="flex flex-col h-[calc(100vh-88px)] lg:h-[calc(100vh-64px)] lg:flex-row overflow-hidden portrait:flex-row landscape:flex-col-reverse">
+        {/* Sidebar: Elements, Deco, Properties */}
+        <aside className={cn(
+          "bg-[#0f0f0f] border-white/10 flex flex-col shrink-0 transition-all",
+          "portrait:w-20 portrait:border-r portrait:h-full sm:portrait:w-48 md:portrait:w-64",
+          "landscape:w-full landscape:h-40 landscape:border-t",
+          "lg:w-72 lg:h-full lg:border-r lg:border-t-0"
+        )}>
+          {/* Tab Selection */}
+          <div className="flex border-b border-white/10 overflow-x-auto scrollbar-hide">
+            <button 
+              onClick={() => setActiveSidebarTab('elements')}
+              className={cn(
+                "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap",
+                activeSidebarTab === 'elements' ? "bg-white/5 text-blue-400 border-b-2 border-blue-500" : "text-white/40 hover:text-white/60"
+              )}
+            >Elements</button>
+            <button 
+              onClick={() => setActiveSidebarTab('deco')}
+              className={cn(
+                "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap",
+                activeSidebarTab === 'deco' ? "bg-white/5 text-pink-400 border-b-2 border-pink-500" : "text-white/40 hover:text-white/60"
+              )}
+            >Deco</button>
+            <button 
+              onClick={() => setActiveSidebarTab('props')}
+              className={cn(
+                "flex-1 py-3 px-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all min-w-fit whitespace-nowrap xl:hidden",
+                activeSidebarTab === 'props' ? "bg-white/5 text-orange-400 border-b-2 border-orange-500" : "text-white/40 hover:text-white/60"
+              )}
+            >Properties</button>
+          </div>
 
-            {/* Element Grid grouped by Category */}
-            <section className="space-y-6">
-              {['walls', 'electronics', 'sensors', 'force', 'powders', 'liquids', 'gases', 'solids', 'explosives', 'radioactive', 'life', 'special', 'custom'].map(cat => {
+          <div className="p-2 sm:p-4 flex-1 overflow-auto space-y-6 custom-scrollbar">
+            {activeSidebarTab === 'elements' ? (
+              <>
+                {/* Search */}
+                <div className="relative hidden sm:block">
+                  <Search className="absolute left-2.5 top-2.5 text-white/20" size={14} />
+                  <input 
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-[10px] sm:text-xs focus:border-blue-500/50 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Element Grid grouped by Category */}
+                <section className="space-y-4">
+                  {['walls', 'electronics', 'sensors', 'force', 'powders', 'liquids', 'gases', 'solids', 'explosives', 'radioactive', 'life', 'special', 'custom'].map(cat => {
                 const catElements = elements.filter(el => 
                   el.category === cat && 
                   (el.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -646,34 +695,27 @@ export default function App() {
                 if (catElements.length === 0) return null;
 
                 return (
-                  <div key={cat} className="space-y-2">
-                    <h3 className="text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] flex items-center gap-2">
-                       <span className="w-1 h-1 rounded-full bg-white/20" />
+                  <div key={cat} className="space-y-1.5">
+                    <h3 className="text-[8px] sm:text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] flex items-center gap-2">
                        {cat}
                     </h3>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-1.5">
                       {catElements.map((el) => (
                         <button
                           key={el.id}
                           onClick={() => setSelectedElement(el.id)}
                           className={cn(
-                            "group relative flex items-center gap-2 p-1.5 rounded border border-white/5 transition-all text-left overflow-hidden",
+                            "group relative flex items-center gap-1.5 p-1 sm:p-1.5 rounded border border-white/5 transition-all text-left overflow-hidden min-h-[28px]",
                             selectedElement === el.id 
-                              ? "bg-white/10 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.1)]" 
-                              : "hover:bg-white/5 active:bg-white/10"
+                              ? "bg-white/10 border-blue-500/30" 
+                              : "hover:bg-white/5"
                           )}
                         >
                           <div 
-                            className="w-2.5 h-2.5 rounded-xs shadow-sm transition-transform group-hover:scale-110 shrink-0" 
+                            className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-xs shrink-0" 
                             style={{ backgroundColor: el.color }}
                           />
-                          <span className="text-[10px] font-medium truncate flex-1">{el.name}</span>
-                          {selectedElement === el.id && (
-                            <motion.div 
-                              layoutId="active-pill"
-                              className="absolute inset-0 border border-blue-500/30 rounded-lg pointer-events-none"
-                            />
-                          )}
+                          <span className="text-[8px] sm:text-[10px] font-medium truncate flex-1 leading-tight">{el.name}</span>
                         </button>
                       ))}
                     </div>
@@ -683,222 +725,139 @@ export default function App() {
               
               <button 
                  onClick={() => setIsEditorOpen(true)}
-                 className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all text-xs font-medium"
+                 className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all text-[10px] font-medium"
               >
-                 <Plus size={14} /> New Element
+                 <Plus size={12} /> New Element
               </button>
             </section>
-
-            {/* Brush Controls */}
-            <section className="space-y-4 pt-4 border-t border-white/5">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Brush Settings</h2>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-white/60">Overwrite Mode</span>
-                <button 
-                  onClick={() => setBrushOverwrite(!brushOverwrite)}
-                  className={cn(
-                    "w-8 h-4 rounded-full transition-colors relative",
-                    brushOverwrite ? "bg-blue-600" : "bg-white/10"
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-1 w-2 h-2 rounded-full bg-white transition-all",
-                    brushOverwrite ? "right-1" : "left-1"
-                  )} />
-                </button>
+          </>
+        ) : activeSidebarTab === 'deco' ? (
+          <section className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="text-[9px] font-bold text-white/40 uppercase tracking-widest leading-none block">Color</h3>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+                {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080', '#008000', '#808080', '#444444'].map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setSelectedDecoColor(color)}
+                    className={cn(
+                      "w-full aspect-square rounded border border-white/10 transition-transform active:scale-95",
+                      selectedDecoColor === color ? "ring-1 ring-blue-500" : ""
+                    )}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
               </div>
-
-              {selectedElement === 'prop' && (
-                <div className="space-y-3 p-3 bg-white/5 rounded-lg border border-white/10">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-white/30 uppercase">Set Temperature</label>
-                    <TemperatureInput 
-                      value={brushTemp}
-                      unit={tempUnit}
-                      onChange={setBrushTemp}
-                      className="w-full bg-black/40 border border-white/5 rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50 text-white"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-white/30 uppercase">Set CTYPE</label>
-                    <select 
-                      value={brushCtype}
-                      onChange={(e) => setBrushCtype(e.target.value)}
-                      className="w-full bg-black/40 border border-white/5 rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
-                    >
-                      {elements.map(el => (
-                        <option key={el.id} value={el.id}>{el.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-mono text-white/40">
-                  <span>Brush Size</span>
-                  <span>{brushSize}px</span>
-                </div>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="50" 
-                  value={brushSize} 
-                  onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                  className="w-full accent-blue-500 cursor-pointer"
-                />
-              </div>
-
-              {/* --- Detection Settings --- */}
-              {elements.find(e => e.id === selectedElement)?.category === 'sensors' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="pt-4 border-t border-white/5 space-y-4"
-                >
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none block mb-2">Detection Threshold</label>
-                  <div className="flex items-center gap-3">
-                    <TemperatureInput 
-                      unit={tempUnit} 
-                      value={detectionThreshold + 273.15} 
-                      onChange={(v) => setDetectionThreshold(v - 273.15)}
-                      className="w-full bg-[#1a1a1a] border border-white/5 rounded p-2 text-xs font-mono text-orange-400 outline-none focus:border-orange-500/50"
-                    />
-                  </div>
-                  <p className="text-[9px] text-white/30 italic">Sensor will spark neighbor conductive pixels when temp exceeds this value.</p>
-                </motion.div>
-              )}
-
-              {/* --- Particle Life Settings --- */}
-              {selectedElement === 'prtl' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="pt-4 border-t border-white/5 space-y-4"
-                >
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none block mb-2">Particle Life Matrix</label>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-white/60">Seed</span>
-                      <input 
-                        type="text" 
-                        value={particleSeed}
-                        onChange={(e) => setParticleSeed(e.target.value)}
-                        className="bg-[#1a1a1a] border border-white/5 rounded px-2 py-1 text-[10px] w-28 outline-none focus:border-blue-500/50 text-blue-400"
-                      />
+            </div>
+          </section>
+        ) : (
+          <section className="space-y-4">
+               {(() => {
+                const el = elements.find(e => e.id === selectedElement);
+                if (!el) return <p className="text-[10px] text-white/40 italic text-center py-8">Select an element to view and edit its properties.</p>;
+                return (
+                  <div className="space-y-6">
+                    <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                        <div className="flex items-center gap-2 mb-3">
+                           <div className="w-8 h-8 rounded-lg shadow-inner" style={{ backgroundColor: el.color }} />
+                           <div className="flex-1 min-w-0">
+                              <div className="text-[10px] font-bold truncate tracking-tight">{el.name}</div>
+                              <div className="text-[8px] text-white/40 uppercase font-mono">{el.id}</div>
+                           </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 overflow-hidden">
+                           <PropertyStat label="Density" value={el.density} unit="" />
+                           <PropertyStat label="BP" value={el.boilingPoint} unit="K" />
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-2 mt-3 pt-3 border-t border-white/5">
+                            <button 
+                              onClick={() => { setEditingElement(el); setIsEditorOpen(true); }}
+                              className="w-full flex items-center justify-center gap-2 p-1.5 rounded-lg bg-blue-600/20 text-blue-400 text-[9px] font-bold uppercase transition-all"
+                            >
+                                <Settings2 size={10} /> Edit Base
+                            </button>
+                        </div>
                     </div>
-                    
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-white/60">Friction</span>
-                        <span className="text-blue-400 font-mono">{particleFriction.toFixed(2)}</span>
+
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                      <div className="space-y-4">
+                        <h4 className="text-[9px] font-bold text-white/20 uppercase tracking-widest">Active Tools</h4>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-white/60">Overwrite</span>
+                          <button 
+                            onClick={() => setBrushOverwrite(!brushOverwrite)}
+                            className={cn(
+                              "w-7 h-3.5 rounded-full transition-colors relative",
+                              brushOverwrite ? "bg-blue-600" : "bg-white/10"
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all",
+                              brushOverwrite ? "right-0.5" : "left-0.5"
+                            )} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-[9px] font-mono text-white/40">
+                            <span>Brush Size</span>
+                            <span>{brushSize}px</span>
+                          </div>
+                          <input 
+                            type="range" min="1" max="50" value={brushSize} 
+                            onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                            className="w-full accent-blue-500 h-1.5"
+                          />
+                        </div>
                       </div>
-                      <input 
-                        type="range" min="0.5" max="1" step="0.01"
-                        value={particleFriction} 
-                        onChange={(e) => setParticleFriction(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-white/5 rounded-lg accent-blue-500 appearance-none cursor-pointer"
-                      />
-                    </div>
 
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-white/60">Radius</span>
-                        <span className="text-blue-400 font-mono">{particleRadius}px</span>
+                      {/* WiFi Channel */}
+                      {selectedElement === 'wifi' && (
+                        <div className="space-y-1.5 p-2 bg-pink-500/5 rounded border border-pink-500/10">
+                          <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest">WiFi Channel</label>
+                          <input 
+                            type="number"
+                            value={wifiChannel}
+                            onChange={(e) => setWifiChannel(parseInt(e.target.value) || 0)}
+                            className="w-full bg-black/40 border border-white/5 rounded p-1 text-[10px] font-mono text-pink-400 outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Vision Modes for Mobile */}
+                      <div className="space-y-2">
+                        <h4 className="text-[9px] font-bold text-white/20 uppercase tracking-widest">Vision Mode</h4>
+                        <div className="grid grid-cols-2 gap-1.5">
+                           {[ViewMode.NORMAL, ViewMode.HEAT, ViewMode.PRESSURE].map(v => (
+                             <button
+                                key={v}
+                                onClick={() => setViewMode(v)}
+                                className={cn(
+                                  "py-1 text-[8px] font-bold uppercase rounded border transition-all",
+                                  viewMode === v ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/5 text-white/40"
+                                )}
+                             >{v}</button>
+                           ))}
+                        </div>
                       </div>
-                      <input 
-                        type="range" min="20" max="300" 
-                        value={particleRadius} 
-                        onChange={(e) => setParticleRadius(parseInt(e.target.value))}
-                        className="w-full h-1 bg-white/5 rounded-lg accent-blue-500 appearance-none cursor-pointer"
-                      />
                     </div>
                   </div>
-                  <p className="text-[9px] text-white/30 italic">Click to spawn particles. Color interactions are seeded.</p>
-                </motion.div>
-              )}
-
-              {/* --- Clone Settings --- */}
-              {selectedElement === 'clne' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="pt-4 border-t border-white/5 space-y-4"
-                >
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest leading-none block mb-2">Clone Target</label>
-                  <select 
-                    value={brushCtype} 
-                    onChange={(e) => setBrushCtype(e.target.value)}
-                    className="w-full bg-[#1a1a1a] border border-white/5 rounded p-2 text-xs font-mono text-yellow-400 outline-none focus:border-yellow-500/50"
-                  >
-                    <option value="empty">None (Auto-learn)</option>
-                    {elements.filter(e => e.id !== 'clne' && e.id !== 'empty').map(el => (
-                      <option key={el.id} value={el.id}>{el.name}</option>
-                    ))}
-                  </select>
-                  <p className="text-[9px] text-white/30 italic">Clone generates this element. If None, it copies the first element it touches.</p>
-                </motion.div>
-              )}
-
-              {/* --- Vision Modes --- */}
-              <section className="space-y-4 pt-4 border-t border-white/5">
-                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Vision Modes</h2>
-                <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    onClick={() => setViewMode(ViewMode.NORMAL)}
-                    className={cn(
-                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
-                      viewMode === ViewMode.NORMAL 
-                        ? "bg-white/20 border-white/20 text-white" 
-                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
-                    )}
-                  >Normal</button>
-                  <button 
-                    onClick={() => setViewMode(ViewMode.HEAT)}
-                    className={cn(
-                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
-                      viewMode === ViewMode.HEAT 
-                        ? "bg-orange-500/20 border-orange-500/40 text-orange-400" 
-                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
-                    )}
-                  >Heat</button>
-                  <button 
-                    onClick={() => setViewMode(ViewMode.PRESSURE)}
-                    className={cn(
-                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
-                      viewMode === ViewMode.PRESSURE 
-                        ? "bg-blue-500/20 border-blue-500/40 text-blue-400" 
-                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
-                    )}
-                  >Pressure</button>
-                  <button 
-                    onClick={() => setViewMode(ViewMode.LIFE)}
-                    className={cn(
-                      "text-[10px] py-1.5 px-2 rounded border transition-all uppercase font-bold", 
-                      viewMode === ViewMode.LIFE 
-                        ? "bg-gray-400/20 border-gray-400/40 text-gray-400" 
-                        : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
-                    )}
-                  >Life</button>
-                </div>
-              </section>
-            </section>
-          </div>
+                );
+              })()}
+          </section>
+        )}
+      </div>
         </aside>
 
         {/* Viewport */}
         <div 
-          className="flex-1 bg-[#050505] relative flex items-center justify-center p-8 overflow-hidden"
+          className="flex-1 bg-[#050505] relative flex items-center justify-center p-2 sm:p-8 overflow-hidden"
           onWheel={handleWheel}
         >
           <div 
-            className="relative shadow-2xl shadow-black/50 border border-white/5 rounded-sm overflow-hidden"
-            style={{
-              transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
-              transition: (isPanning || isPainting.current) ? 'none' : 'transform 0.1s ease-out'
-            }}
+            className="relative shadow-2xl shadow-black/50 border border-white/5 rounded-sm overflow-hidden w-full h-full max-w-full max-h-full flex items-center justify-center"
           >
              <canvas
                 ref={canvasRef}
@@ -911,13 +870,17 @@ export default function App() {
                 }}
                 onPointerUp={stopPainting}
                 onPointerLeave={stopPainting}
-                className="cursor-crosshair touch-none bg-black"
-                style={{ imageRendering: 'pixelated' }}
+                className="cursor-crosshair touch-none bg-black max-w-full max-h-full object-contain"
+                style={{ 
+                  imageRendering: 'pixelated',
+                  transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`,
+                  transition: (isPanning || isPainting.current) ? 'none' : 'transform 0.1s ease-out'
+                }}
              />
           </div>
           
           {/* HUD Overlay */}
-          <div className="absolute top-12 left-12 pointer-events-none">
+          <div className="absolute top-4 left-4 sm:top-12 sm:left-12 pointer-events-none hidden sm:block">
              <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -928,56 +891,116 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Panel: Properties */}
-        <aside className="w-72 border-l border-white/10 bg-[#0f0f0f] hidden xl:block">
+        {/* Right Panel: Properties & Settings (Desktop only) */}
+        <aside className="w-80 border-l border-white/10 bg-[#0f0f0f] hidden xl:flex flex-col overflow-y-auto custom-scrollbar">
            <div className="p-4 space-y-6">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Element Properties</h2>
-              {(() => {
-                const el = elements.find(e => e.id === selectedElement);
-                if (!el) return null;
-                return (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                        <div className="flex items-center gap-3 mb-4">
-                           <div className="w-10 h-10 rounded-lg shadow-inner" style={{ backgroundColor: el.color }} />
-                           <div>
-                              <div className="text-sm font-bold">{el.name}</div>
-                              <div className="text-[10px] text-white/40 uppercase font-mono">{el.category}</div>
-                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                           <PropertyStat label="Density" value={el.density} unit="kg/m³" />
-                           <PropertyStat label="Status" value={el.state} unit="" />
-                           <PropertyStat label="BP" value={el.boilingPoint} unit="K" />
-                           <PropertyStat label="Cond" value={(el.conductivity * 100).toFixed(0)} unit="%" />
-                           <PropertyStat label="Thermal" value={(el.thermalConductivity * 100).toFixed(0)} unit="%" />
-                        </div>
+              <section className="space-y-4">
+                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Brush Settings</h2>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/60">Overwrite Mode</span>
+                  <button 
+                    onClick={() => setBrushOverwrite(!brushOverwrite)}
+                    className={cn(
+                      "w-8 h-4 rounded-full transition-colors relative",
+                      brushOverwrite ? "bg-blue-600" : "bg-white/10"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-2 h-2 rounded-full bg-white transition-all",
+                      brushOverwrite ? "right-1" : "left-1"
+                    )} />
+                  </button>
+                </div>
 
-                        <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
-                           <button 
-                             onClick={() => {
-                                setEditingElement(el);
-                                setIsEditorOpen(true);
-                             }}
-                             className="flex items-center justify-center gap-2 p-2 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-all text-[10px] font-bold uppercase tracking-wider"
-                           >
-                              <Settings2 size={12} /> Edit
-                           </button>
-                           <button 
-                             onClick={() => {
-                                const clone = { ...el, id: 'custom-' + Date.now(), name: el.name + ' (Copy)' };
-                                setEditingElement(clone);
-                                setIsEditorOpen(true);
-                             }}
-                             className="flex items-center justify-center gap-2 p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all text-[10px] font-bold uppercase tracking-wider"
-                           >
-                              <Plus size={12} /> Clone
-                           </button>
-                        </div>
-                    </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-mono text-white/40">
+                    <span>Brush Size</span>
+                    <span>{brushSize}px</span>
                   </div>
-                );
-              })()}
+                  <input 
+                    type="range" min="1" max="50" value={brushSize} 
+                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                    className="w-full accent-blue-500 cursor-pointer h-1.5"
+                  />
+                </div>
+              </section>
+
+              {/* Dynamic Element Properties */}
+              <section className="pt-6 border-t border-white/5">
+                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">Properties</h2>
+                {(() => {
+                  const el = elements.find(e => e.id === selectedElement);
+                  if (!el) return null;
+                  return (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+                          <div className="flex items-center gap-3 mb-4">
+                             <div className="w-10 h-10 rounded-lg shadow-inner" style={{ backgroundColor: el.color }} />
+                             <div>
+                                <div className="text-sm font-bold">{el.name}</div>
+                                <div className="text-[10px] text-white/40 uppercase font-mono">{el.id}</div>
+                             </div>
+                          </div>
+                          
+                          {selectedElement === 'wifi' && (
+                            <div className="mb-4 space-y-2 p-3 bg-pink-500/5 rounded-lg border border-pink-500/10">
+                              <label className="text-[10px] font-bold text-pink-400/60 uppercase">Wi-Fi Channel</label>
+                              <input 
+                                type="number"
+                                value={wifiChannel}
+                                onChange={(e) => setWifiChannel(parseInt(e.target.value) || 0)}
+                                className="w-full bg-black/40 border border-white/5 rounded px-2 py-1.5 text-xs font-mono text-pink-400 outline-none"
+                              />
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-4">
+                             <PropertyStat label="Density" value={el.density} unit="kg/m³" />
+                             <PropertyStat label="Status" value={el.state} unit="" />
+                             <PropertyStat label="BP" value={el.boilingPoint} unit="K" />
+                             <PropertyStat label="Cond" value={(el.conductivity * 100).toFixed(0)} unit="%" />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5">
+                             <button 
+                               onClick={() => { setEditingElement(el); setIsEditorOpen(true); }}
+                               className="flex items-center justify-center gap-2 p-2 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-all text-[10px] font-bold uppercase"
+                             >
+                                <Settings2 size={12} /> Edit
+                             </button>
+                             <button 
+                               onClick={() => {
+                                  const clone = { ...el, id: 'custom-' + Date.now(), name: el.name + ' (Copy)' };
+                                  setEditingElement(clone);
+                                  setIsEditorOpen(true);
+                               }}
+                               className="flex items-center justify-center gap-2 p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all text-[10px] font-bold uppercase"
+                             >
+                                <Plus size={12} /> Clone
+                             </button>
+                          </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </section>
+
+              <section className="pt-6 border-t border-white/5">
+                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">View Modes</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {[ViewMode.NORMAL, ViewMode.HEAT, ViewMode.PRESSURE, ViewMode.LIFE].map(mode => (
+                    <button 
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      className={cn(
+                        "text-[9px] py-2 rounded border transition-all uppercase font-bold", 
+                        viewMode === mode ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
+                      )}
+                    >{mode}</button>
+                  ))}
+                </div>
+              </section>
            </div>
         </aside>
       </main>

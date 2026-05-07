@@ -16,6 +16,8 @@ export class SimulationEngine {
   public nextCtypeGrid: Uint32Array;
   public tempGrid: Float32Array;
   public nextTempGrid: Float32Array;
+  public decoGrid: Uint32Array;
+  public showDecoration: boolean = true;
   public elements: Map<string, ElementProperties> = new Map();
   public elementList: ElementProperties[] = [];
   public viewMode: ViewMode = ViewMode.NORMAL;
@@ -44,6 +46,7 @@ export class SimulationEngine {
     this.tempGrid = new Float32Array(this.width * this.height);
     this.tempGrid.fill(293); // Room temperature ~20C in Kelvin
     this.nextTempGrid = new Float32Array(this.width * this.height);
+    this.decoGrid = new Uint32Array(this.width * this.height);
     this.imageData = new ImageData(this.width, this.height);
     this.buffer = new Uint32Array(this.imageData.data.buffer);
     
@@ -81,6 +84,7 @@ export class SimulationEngine {
       lifeGrid: new Uint8Array(this.lifeGrid),
       pressureGrid: new Float32Array(this.pressureGrid),
       ctypeGrid: new Uint32Array(this.ctypeGrid),
+      decoGrid: new Uint32Array(this.decoGrid),
       particles: JSON.parse(JSON.stringify(this.particles))
     };
   }
@@ -91,6 +95,7 @@ export class SimulationEngine {
     this.lifeGrid.set(snapshot.lifeGrid);
     this.pressureGrid.set(snapshot.pressureGrid);
     this.ctypeGrid.set(snapshot.ctypeGrid);
+    if (snapshot.decoGrid) this.decoGrid.set(snapshot.decoGrid);
     this.particles = snapshot.particles || [];
     this.nextGrid.set(this.grid);
     this.nextTempGrid.set(this.tempGrid);
@@ -112,6 +117,7 @@ export class SimulationEngine {
     this.nextCtypeGrid.fill(0);
     this.tempGrid.fill(293.15);
     this.nextTempGrid.fill(293.15);
+    this.decoGrid.fill(0);
     this.particles = [];
   }
 
@@ -207,6 +213,16 @@ export class SimulationEngine {
     }
   }
 
+  public setDeco(x: number, y: number, color: string | null) {
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
+    const index = y * this.width + x;
+    if (color === null) {
+      this.decoGrid[index] = 0;
+    } else {
+      this.decoGrid[index] = this.hexToUint32(color);
+    }
+  }
+
   public step() {
     // Copy current state to next buffers for persistent properties
     this.nextGrid.set(this.grid);
@@ -216,6 +232,8 @@ export class SimulationEngine {
     this.nextLifeGrid.fill(0);
 
     // 1. Spark / Electricity Propagation (TPT-like Life Cycle)
+    const sparkedWifiChannels = new Set<number>();
+
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const idx = y * this.width + x;
@@ -228,6 +246,11 @@ export class SimulationEngine {
         } else if (life > 0) {
            // Decay
            this.nextLifeGrid[idx] = life - 1;
+        }
+
+        // Wi-Fi Transmission: If sparked and at transmission state (life 3)
+        if (el && el.id === 'wifi' && life === 3) {
+           sparkedWifiChannels.add(this.ctypeGrid[idx]);
         }
 
         // Conduction at Life 3 or 4 (sources always spark)
@@ -295,6 +318,21 @@ export class SimulationEngine {
         }
       }
     }
+
+    // Wi-Fi Reception Pass: Spark all WiFi on active channels
+    if (sparkedWifiChannels.size > 0) {
+      for (let i = 0; i < this.grid.length; i++) {
+        const elIdx = this.grid[i];
+        const el = this.elementList[elIdx];
+        if (el && el.id === 'wifi') {
+           const channel = this.ctypeGrid[i];
+           if (sparkedWifiChannels.has(channel) && this.lifeGrid[i] === 0) {
+              this.nextLifeGrid[i] = 4;
+           }
+        }
+      }
+    }
+
     // 2. Physics logic
     // We work from current life/temp/etc into next buffers
     for (let y = this.height - 1; y >= 0; y--) {
@@ -522,7 +560,7 @@ export class SimulationEngine {
         const smkeIdx = this.elementList.findIndex(e => e.id === 'smke');
         if (smkeIdx >= 0) {
           this.nextGrid[idx] = smkeIdx;
-          this.nextLifeGrid[idx] = 0;
+          this.nextLifeGrid[idx] = 20 + Math.floor(Math.random() * 30); // Smoke has its own life/decay
         } else {
           this.nextGrid[idx] = 0;
         }
@@ -592,9 +630,17 @@ export class SimulationEngine {
         } else {
            if (Math.random() < element.flammability * 0.1) {
               const fireIdx = this.elementList.findIndex(e => e.id === 'fire');
+              const embrIdx = this.elementList.findIndex(e => e.id === 'embr');
+              
               if (fireIdx >= 0) {
-                  this.nextGrid[idx] = fireIdx;
-                  this.nextLifeGrid[idx] = 80 + Math.floor(Math.random() * 40);
+                  // If it's a solid/powder, it might leave an ember
+                  if ((element.state === PhysicalState.SOLID || element.state === PhysicalState.POWDER) && Math.random() < 0.3 && embrIdx >= 0) {
+                    this.nextGrid[idx] = embrIdx;
+                    this.nextLifeGrid[idx] = 40 + Math.floor(Math.random() * 40);
+                  } else {
+                    this.nextGrid[idx] = fireIdx;
+                    this.nextLifeGrid[idx] = 80 + Math.floor(Math.random() * 40);
+                  }
                   this.nextTempGrid[idx] += 100;
                   return;
               }
@@ -603,8 +649,37 @@ export class SimulationEngine {
       }
     }
 
+    // Ember special logic (Powder spark)
+    if (element.id === 'embr') {
+       const life = this.lifeGrid[idx];
+       if (life > 0) {
+         this.nextLifeGrid[idx] = life - 1;
+       } else if (Math.random() < 0.05) {
+         // Natural decay if no life set
+         const targetElIdx = this.elementList.findIndex(e => e.id === element.decaysIntoId);
+         if (targetElIdx >= 0) {
+           this.nextGrid[idx] = targetElIdx;
+           return;
+         }
+       }
+    }
+
+    // Smoke logic
+    if (element.id === 'smke') {
+       const life = this.lifeGrid[idx];
+       if (life > 0) {
+         this.nextLifeGrid[idx] = life - 1;
+       } else {
+         // Natural decay
+         if (Math.random() < 0.02) {
+           this.nextGrid[idx] = 0;
+           return;
+         }
+       }
+    }
+
     // Decay logic
-    if (element.decaysIntoId && Math.random() < (element.decayChance || 0)) {
+    if (element.id !== 'smke' && element.id !== 'embr' && element.decaysIntoId && Math.random() < (element.decayChance || 0)) {
         const targetElIdx = this.elementList.findIndex(e => e.id === element.decaysIntoId);
         if (targetElIdx >= 0) {
             this.nextGrid[idx] = targetElIdx;
@@ -887,6 +962,7 @@ export class SimulationEngine {
               this.nextGrid[idx] = sparkIdx;
               if (sparkId === 'embr') {
                   this.nextTempGrid[idx] = 495.15; // 222C
+                  this.nextLifeGrid[idx] = 40 + Math.floor(Math.random() * 40);
               }
            } else if (Math.random() < 0.1) {
               this.nextGrid[idx] = 0; // Air
@@ -907,6 +983,27 @@ export class SimulationEngine {
         
         let finalColor = color;
 
+        // Decoration overlay
+        if (this.showDecoration && this.decoGrid[i] !== 0 && this.viewMode === ViewMode.NORMAL) {
+           const decoColor = this.uint32ToHex(this.decoGrid[i]);
+           if (element.id === 'lcry') {
+              if (life > 0) {
+                 finalColor = decoColor;
+              } else {
+                 finalColor = this.lerpColor(decoColor, '#000000', 0.5);
+              }
+           } else {
+              finalColor = decoColor;
+           }
+        } else if (element.id === 'lcry' && this.viewMode === ViewMode.NORMAL) {
+           // Default LCRY behavior if no decoration
+           if (life > 0) {
+              finalColor = color;
+           } else {
+              finalColor = this.lerpColor(color, '#000000', 0.5);
+           }
+        }
+
         if (this.viewMode === ViewMode.HEAT) {
             // Heat view: Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Pink (9700C+)
             const tempC = temp - 273.15;
@@ -925,16 +1022,16 @@ export class SimulationEngine {
             else finalColor = '#000000'; // Black (Neutral)
         } else if (this.viewMode === ViewMode.LIFE) {
             // Life view: High (light gray) -> Low (black)
-            const l = Math.floor((life / 255) * 255);
             if (elIdx !== 0 || life > 0) {
-              const grey = Math.floor((life / 100) * 200); // Life is usually 0-100 or 0-4
-              // For electrical life (0-4), we need more contrast
-              if (life > 0 && life <= 4) {
-                 const g = 50 + life * 50;
-                 finalColor = `rgb(${g},${g},${g})`;
+              // Normalize life based on typical max (100 for fire/smke/embr, 4 for electricity)
+              let intensity = 0;
+              if (life > 4) {
+                intensity = Math.min(life / 100, 1.0);
               } else {
-                 finalColor = `rgb(${grey},${grey},${grey})`;
+                intensity = Math.min(life / 4, 1.0);
               }
+              const grey = Math.floor(50 + intensity * 150);
+              finalColor = `rgb(${grey},${grey},${grey})`;
             } else {
               finalColor = '#000000';
             }
@@ -978,9 +1075,13 @@ export class SimulationEngine {
             }
 
             // Spark overlay
-            if (life > 0 && element.id !== 'fire' && element.id !== 'smke') {
+            if (life > 0 && (element.id === 'sprk' || element.id === 'embr')) {
               const sparkColor = '#FFFFCC';
-              finalColor = this.lerpColor(finalColor, sparkColor, life / 4);
+              const intensity = Math.min(life / 4, 1.0);
+              finalColor = this.lerpColor(finalColor, sparkColor, intensity);
+            } else if (life > 0 && element.id !== 'fire' && element.id !== 'smke') {
+              // Minimal lightening for other powered things (like wires/silicon)
+              finalColor = this.lerpColor(finalColor, '#FFFFFF', 0.15);
             }
         }
 
@@ -1050,5 +1151,12 @@ export class SimulationEngine {
     const b = parseInt(hex.slice(5, 7), 16);
     // ABGR format for little-endian Uint32Array
     return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+
+  private uint32ToHex(val: number): string {
+    const r = val & 0xFF;
+    const g = (val >> 8) & 0xFF;
+    const b = (val >> 16) & 0xFF;
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
   }
 }
