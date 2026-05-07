@@ -1133,7 +1133,7 @@
         "targetElementId": "plant",
         "chance": 0.1,
         "transformIntoId": "custom-1778128653690",
-        "producesElementId": "empty"
+        "producesElementId": ""
       }
     ],
     "decayChance": 0.02,
