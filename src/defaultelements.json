@@ -538,6 +538,31 @@
     "reactions": []
   },
   {
+    "name": "Salt Water",
+    "abbreviation": "SWTR",
+    "color": "#3b82f6",
+    "state": "liquid",
+    "density": 50,
+    "acidity": 7,
+    "boilingPoint": 373.15,
+    "freezingPoint": 173.14999999999998,
+    "vaporElementId": "salt",
+    "congealElementId": "ice",
+    "conductivity": 1,
+    "isExplosive": false,
+    "explosiveTrigger": "temp",
+    "category": "liquids",
+    "reactions": [
+      {
+        "targetElementId": "plant",
+        "chance": 0.1,
+        "transformIntoId": "empty"
+      }
+    ],
+    "thermalConductivity": 0.1,
+    "id": "custom-1778126106181"
+  },
+  {
     "id": "stne",
     "name": "Stone",
     "color": "#A0A0A0",
