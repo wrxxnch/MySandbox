@@ -566,7 +566,7 @@ export class SimulationEngine {
 
     // FIRE special logic
     if (element.id === 'fire') {
-      this.nextPressureGrid[idx] += 2.0; // Fire creates pressure
+      // this.nextPressureGrid[idx] += 2.0; // Fire creates pressure
       
       const fireLife = this.lifeGrid[idx];
       if (fireLife > 0) {
@@ -775,7 +775,9 @@ export class SimulationEngine {
       }
     }
     
-    if (state === PhysicalState.POWDER) { 
+    if (element.id === 'fire') {
+       this.handleGas(x, y, elIdx);
+    } else if (state === PhysicalState.POWDER) { 
        this.handleFalling(x, y, elIdx);
     } else if (state === PhysicalState.LIQUID) {
        this.handleLiquid(x, y, elIdx);
@@ -872,7 +874,7 @@ export class SimulationEngine {
 
   private handleGas(x: number, y: number, elIdx: number) {
     const el = this.elementList[elIdx];
-    const isLight = el.density < 0.05; // Gases generally rise unless very dense
+    const isLight = el.density < 2.0; // Fixed: Allow fire (0.05), smoke (0.05), and normal gases to rise.
     const dirY = isLight ? -1 : 1;
     
     if (y <= 0 && isLight) {
@@ -1076,7 +1078,7 @@ export class SimulationEngine {
 
         // Optimization: Skip empty pixels (Air) if NORMAL view
         if (elIdx === 0 && this.viewMode === ViewMode.NORMAL) {
-          this.buffer[i] = 0x00000000;
+          this.buffer[i] = 0xFF000000;
           continue;
         }
 

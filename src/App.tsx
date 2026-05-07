@@ -1286,7 +1286,7 @@ export default function App() {
               onMouseLeave={() => setIsBottomBarHovered(false)}
               className={cn(
                 "h-16 border-t border-white/10 bg-[#0f0f0f] flex items-center px-4 gap-2 transition-all duration-300 z-50 overflow-x-auto scrollbar-hide shrink-0",
-                !isBottomBarHovered && !isSidebarHovered && !isFullscreen && "opacity-40 grayscale"
+                !isBottomBarHovered && !isSidebarHovered && "opacity-40 grayscale"
               )}
             >
               {elements.filter(el => {

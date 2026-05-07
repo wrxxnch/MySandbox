@@ -538,6 +538,31 @@
     "reactions": []
   },
   {
+    "name": "Salt Water",
+    "abbreviation": "SWTR",
+    "color": "#3b82f6",
+    "state": "liquid",
+    "density": 50,
+    "acidity": 7,
+    "boilingPoint": 373.15,
+    "freezingPoint": 173.14999999999998,
+    "vaporElementId": "salt",
+    "congealElementId": "ice",
+    "conductivity": 1,
+    "isExplosive": false,
+    "explosiveTrigger": "temp",
+    "category": "liquids",
+    "reactions": [
+      {
+        "targetElementId": "plant",
+        "chance": 0.1,
+        "transformIntoId": "empty"
+      }
+    ],
+    "thermalConductivity": 0.1,
+    "id": "custom-1778126106181"
+  },
+  {
     "id": "stne",
     "name": "Stone",
     "color": "#A0A0A0",
@@ -599,7 +624,26 @@
     "thermalConductivity": 0.2,
     "isExplosive": false,
     "category": "liquids",
-    "reactions": []
+    "reactions": [
+      {
+        "targetElementId": "salt",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778126106181",
+        "producesElementId": "empty"
+      },
+      {
+        "targetElementId": "custom-1778126106181",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778126106181",
+        "producesElementId": "custom-1778126106181"
+      },
+      {
+        "targetElementId": "acid",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778127955087",
+        "producesElementId": "custom-1778127955087"
+      }
+    ]
   },
   {
     "id": "oil",
@@ -648,6 +692,36 @@
     "isExplosive": false,
     "category": "liquids",
     "reactions": []
+  },
+  {
+    "id": "custom-1778127955087",
+    "name": "Caustic Gas",
+    "color": "#ADFF2F",
+    "state": "gas",
+    "density": 3,
+    "acidity": 1,
+    "boilingPoint": 226.85,
+    "freezingPoint": 200,
+    "conductivity": 0.5,
+    "thermalConductivity": 0.1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [
+      {
+        "targetElementId": "gold",
+        "chance": 0.1,
+        "transformIntoId": "stone",
+        "isExclude": true,
+        "producesElementId": "empty"
+      },
+      {
+        "targetElementId": "glass",
+        "chance": 0.1,
+        "transformIntoId": "stone",
+        "isExclude": true
+      }
+    ],
+    "abbreviation": "Caus"
   },
   {
     "id": "steam",
@@ -707,7 +781,7 @@
     "acidity": 7,
     "boilingPoint": 10000,
     "freezingPoint": 300,
-    "conductivity": 0,
+    "conductivity": 0.1,
     "thermalConductivity": 0.8,
     "baseTemperature": 673,
     "isExplosive": false,
@@ -1020,5 +1094,70 @@
     "isExplosive": false,
     "category": "life",
     "reactions": []
+  },
+  {
+    "id": "custom-1778128653690",
+    "name": "Oxygen",
+    "color": "#65ddfb",
+    "state": "gas",
+    "density": 50,
+    "acidity": 7,
+    "boilingPoint": 9726.85,
+    "freezingPoint": 73.14999999999998,
+    "congealElementId": "",
+    "conductivity": 0,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [],
+    "abbreviation": "OXYG",
+    "flammability": 1,
+    "fuel": 3,
+    "burnSpeed": 1
+  },
+  {
+    "id": "custom-1778128756173",
+    "name": "Carbon Dioxide",
+    "color": "#545454",
+    "state": "gas",
+    "density": 0.05,
+    "acidity": 7,
+    "boilingPoint": 673.15,
+    "freezingPoint": 173.14999999999998,
+    "conductivity": 0,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [
+      {
+        "targetElementId": "plant",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778128653690",
+        "producesElementId": ""
+      }
+    ],
+    "decayChance": 0.02,
+    "decaysIntoId": "empty",
+    "abbreviation": "CO2",
+    "baseTemperature": 305.15,
+    "vaporElementId": "fire"
+  },
+  {
+    "id": "custom-1778129665868",
+    "name": "Copper",
+    "color": "#b72e01",
+    "state": "solid",
+    "density": 8,
+    "acidity": 7,
+    "boilingPoint": 1357.15,
+    "vaporElementId": "lava",
+    "freezingPoint": -1,
+    "conductivity": 1,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "solids",
+    "reactions": [],
+    "abbreviation": "COPR",
+    "baseTemperature": 295.15
   }
 ]
