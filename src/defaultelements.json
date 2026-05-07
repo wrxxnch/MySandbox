@@ -1094,5 +1094,52 @@
     "isExplosive": false,
     "category": "life",
     "reactions": []
+  },
+    {
+    "id": "custom-1778128653690",
+    "name": "Oxygen",
+    "color": "#65ddfb",
+    "state": "gas",
+    "density": 50,
+    "acidity": 7,
+    "boilingPoint": 9726.85,
+    "freezingPoint": 73.14999999999998,
+    "congealElementId": "",
+    "conductivity": 0,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [],
+    "abbreviation": "OXYG",
+    "flammability": 1,
+    "fuel": 3,
+    "burnSpeed": 1
+  },
+  {
+    "id": "custom-1778128756173",
+    "name": "Carbon Dioxide",
+    "color": "#545454",
+    "state": "gas",
+    "density": 0.05,
+    "acidity": 7,
+    "boilingPoint": 673.15,
+    "freezingPoint": 173.14999999999998,
+    "conductivity": 0,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [
+      {
+        "targetElementId": "plant",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778128653690",
+        "producesElementId": "empty"
+      }
+    ],
+    "decayChance": 0.02,
+    "decaysIntoId": "empty",
+    "abbreviation": "CO2",
+    "baseTemperature": 305.15,
+    "vaporElementId": "fire"
   }
 ]
