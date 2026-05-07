@@ -15,6 +15,42 @@
     "reactions": []
   },
   {
+  "name": "Hydrogen",
+  "abbreviation": "HYDR",
+  "color": "#b8f1ff",
+  "state": "gas",
+  "density": 0,
+  "acidity": 7,
+  "boilingPoint": 9726.85,
+  "freezingPoint": 73.14999999999998,
+  "vaporElementId": "",
+  "congealElementId": "",
+  "conductivity": 0,
+  "isExplosive": true,
+  "explosiveTrigger": "temp",
+  "category": "gases",
+  "reactions": [
+    {
+      "targetElementId": "fire",
+      "chance": 0.1,
+      "transformIntoId": "fire",
+      "producesElementId": "fire"
+    },
+    {
+      "targetElementId": "custom-1778128653690",
+      "chance": 0.1,
+      "transformIntoId": "water",
+      "producesElementId": "water",
+      "minTemp": 100
+    }
+  ],
+  "thermalConductivity": 1,
+  "id": "custom-1778178434714",
+  "flammability": 1,
+  "fuel": 3,
+  "burnSpeed": 1
+},
+  {
     "id": "clne",
     "name": "Clone",
     "color": "#FFFF00",
