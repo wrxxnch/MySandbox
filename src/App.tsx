@@ -1511,8 +1511,12 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
     >
       <motion.div 
         initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        className="bg-[#151515] border border-white/10 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+        animate={{ 
+          scale: 1, 
+          y: 0,
+          maxWidth: showJson ? '1200px' : '896px' // max-w-7xl vs max-w-4xl
+        }}
+        className="bg-[#151515] border border-white/10 rounded-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-[max-width] duration-300"
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#1a1a1a]">
            <div>
@@ -1558,14 +1562,15 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         </div>
         
         {showJson ? (
-          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4">
+          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4 min-h-[500px]">
              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400">Raw Element Data</h3>
-                <span className="text-[10px] text-white/20 italic">Manual edits here will sync with the form</span>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400">Raw Element Data Definition</h3>
+                <span className="text-[10px] text-white/20 italic font-mono bg-white/5 px-2 py-1 rounded">JSON Interface v1.0</span>
              </div>
              <textarea 
-                className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-[11px] text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/20 resize-none scrollbar-hide"
+                className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl p-6 font-mono text-xs leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10"
                 value={JSON.stringify(formData, null, 2)}
+                spellCheck={false}
                 onChange={(e) => {
                    try {
                       const parsed = JSON.parse(e.target.value);
@@ -1576,13 +1581,16 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                 }}
              />
              <div className="pt-6 border-t border-white/5">
-                <button 
-                    onClick={handleSubmit}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 group"
-                >
-                    <Zap size={20} className="group-hover:animate-pulse" />
-                    Forge Element Definition
-                </button>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[10px] text-white/30 max-w-sm">Warning: Changes here are instant. Ensure the JSON schema remains valid to avoid simulation instability.</p>
+                  <button 
+                      onClick={handleSubmit}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
+                  >
+                      <Zap size={18} className="group-hover:animate-pulse" />
+                      Commit Changes
+                  </button>
+                </div>
               </div>
           </div>
         ) : (
@@ -1772,7 +1780,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                </div>
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40">Heat Cond. (0-1)</label>
-                  <input type="number" step="0.1" min="0" max="1" value={formData.thermalConductivity} onChange={e => setFormData({...formData, thermalConductivity: parseFloat(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
+                  <input type="number" step="0.1" min="0" max="5" value={formData.thermalConductivity} onChange={e => setFormData({...formData, thermalConductivity: parseFloat(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
                </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

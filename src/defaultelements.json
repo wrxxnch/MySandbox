@@ -15,42 +15,6 @@
     "reactions": []
   },
   {
-  "name": "Hydrogen",
-  "abbreviation": "HYDR",
-  "color": "#b8f1ff",
-  "state": "gas",
-  "density": 0,
-  "acidity": 7,
-  "boilingPoint": 9726.85,
-  "freezingPoint": 73.14999999999998,
-  "vaporElementId": "",
-  "congealElementId": "",
-  "conductivity": 0,
-  "isExplosive": true,
-  "explosiveTrigger": "temp",
-  "category": "gases",
-  "reactions": [
-    {
-      "targetElementId": "fire",
-      "chance": 0.1,
-      "transformIntoId": "fire",
-      "producesElementId": "fire"
-    },
-    {
-      "targetElementId": "custom-1778128653690",
-      "chance": 0.1,
-      "transformIntoId": "water",
-      "producesElementId": "water",
-      "minTemp": 100
-    }
-  ],
-  "thermalConductivity": 1,
-  "id": "custom-1778178434714",
-  "flammability": 1,
-  "fuel": 3,
-  "burnSpeed": 1
-},
-  {
     "id": "clne",
     "name": "Clone",
     "color": "#FFFF00",
@@ -1131,57 +1095,53 @@
     "category": "life",
     "reactions": []
   },
-{
-  "name": "Oxygen",
-  "abbreviation": "OXYG",
-  "color": "#65ddfb",
-  "state": "gas",
-  "density": 1,
-  "acidity": 7,
-  "boilingPoint": 9726.85,
-  "freezingPoint": 73.14999999999998,
-  "vaporElementId": "",
-  "congealElementId": "",
-  "conductivity": 0,
-  "isExplosive": false,
-  "explosiveTrigger": "temp",
-  "category": "gases",
-  "reactions": [],
-  "thermalConductivity": 1,
-  "id": "custom-1778128653690",
-  "flammability": 1,
-  "fuel": 3,
-  "burnSpeed": 1
-},
- {
-  "name": "Carbon Dioxide",
-  "abbreviation": "CO2",
-  "color": "#545454",
-  "state": "gas",
-  "density": 0.05,
-  "acidity": 7,
-  "boilingPoint": 673.15,
-  "freezingPoint": 173.14999999999998,
-  "vaporElementId": "fire",
-  "congealElementId": "",
-  "conductivity": 0,
-  "isExplosive": false,
-  "explosiveTrigger": "temp",
-  "category": "gases",
-  "reactions": [
-    {
-      "targetElementId": "plant",
-      "chance": 0.1,
-      "transformIntoId": "custom-1778128653690",
-      "producesElementId": ""
-    }
-  ],
-  "thermalConductivity": 1,
-  "id": "custom-1778128756173",
-  "decayChance": 0,
-  "decaysIntoId": "",
-  "baseTemperature": 305.15
-},
+  {
+    "id": "custom-1778128653690",
+    "name": "Oxygen",
+    "color": "#65ddfb",
+    "state": "gas",
+    "density": 50,
+    "acidity": 7,
+    "boilingPoint": 9726.85,
+    "freezingPoint": 73.14999999999998,
+    "congealElementId": "",
+    "conductivity": 0,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [],
+    "abbreviation": "OXYG",
+    "flammability": 1,
+    "fuel": 3,
+    "burnSpeed": 1
+  },
+  {
+    "id": "custom-1778128756173",
+    "name": "Carbon Dioxide",
+    "color": "#545454",
+    "state": "gas",
+    "density": 0.05,
+    "acidity": 7,
+    "boilingPoint": 673.15,
+    "freezingPoint": 173.14999999999998,
+    "conductivity": 0,
+    "thermalConductivity": 1,
+    "isExplosive": false,
+    "category": "gases",
+    "reactions": [
+      {
+        "targetElementId": "plant",
+        "chance": 0.1,
+        "transformIntoId": "custom-1778128653690",
+        "producesElementId": ""
+      }
+    ],
+    "decayChance": 0.02,
+    "decaysIntoId": "empty",
+    "abbreviation": "CO2",
+    "baseTemperature": 305.15,
+    "vaporElementId": "fire"
+  },
   {
     "id": "custom-1778129665868",
     "name": "Copper",

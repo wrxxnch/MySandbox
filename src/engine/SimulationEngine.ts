@@ -874,23 +874,48 @@ export class SimulationEngine {
 
   private handleGas(x: number, y: number, elIdx: number) {
     const el = this.elementList[elIdx];
-    const isLight = el.density < 2.0; // Fixed: Allow fire (0.05), smoke (0.05), and normal gases to rise.
-    const dirY = isLight ? -1 : 1;
+    const density = el.density;
     
-    if (y <= 0 && isLight) {
+    // Limits
+    if (y <= 0 && density < 0) {
       this.setPixelToAir(x, y);
       return;
     }
-    if (y >= this.height - 1 && !isLight) {
-       return; // Heavy gas rests on floor
+    if (y >= this.height - 1 && density > 0) {
+       return; 
     }
 
-    const targets = [
-      [0, dirY],           
-      [Math.random() > 0.5 ? 1 : -1, dirY], 
-      [Math.random() > 0.5 ? -1 : 1, dirY], 
-      [Math.random() > 0.5 ? 1 : -1, 0],    
-    ];
+    // Determine move priorities based on density
+    // Negative density = rises. Positive density = falls. 0 = static vertical.
+    // Magnitude = speed/priority.
+    const absDensity = Math.abs(density);
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const vert = Math.random() > 0.5 ? 1 : -1;
+    
+    let targets: [number, number][] = [];
+    
+    if (density < 0) {
+      // Buoyant: rises
+      // If density is very negative (e.g. -5), prioritize up more.
+      // If density is -1, mix with side moves.
+      const riseBias = Math.min(0.9, absDensity * 0.2); 
+      if (Math.random() < riseBias) {
+        targets = [[0, -1], [side, -1], [-side, -1], [side, 0], [-side, 0]];
+      } else {
+        targets = [[side, 0], [-side, 0], [0, -1], [side, -1], [0, 1]];
+      }
+    } else if (density > 0) {
+      // Heavy gas: falls
+      const fallBias = Math.min(0.9, absDensity * 0.2);
+      if (Math.random() < fallBias) {
+        targets = [[0, 1], [side, 1], [-side, 1], [side, 0], [-side, 0]];
+      } else {
+        targets = [[side, 0], [-side, 0], [0, 1], [side, 1], [0, -1]];
+      }
+    } else {
+      // Static vertical (density 0): random in all directions
+      targets = [[side, 0], [-side, 0], [0, 1], [0, -1], [side, vert], [-side, vert]];
+    }
 
     for (const [dx, dy] of targets) {
       const tx = x + dx;
@@ -906,16 +931,19 @@ export class SimulationEngine {
       } else {
         const nEl = this.elementList[nElIdx];
         if (nEl && (nEl.state === PhysicalState.LIQUID || nEl.state === PhysicalState.GAS)) {
-           if (isLight && nEl.density > el.density) {
-              if (Math.random() < 0.4) {
+           // Swap check
+           if (density < nEl.density) {
+              // I am lighter than neighbor, try to go up
+              if (dy < 0 && Math.random() < 0.5) {
                  this.swapPixels(x, y, tx, ty);
                  return;
               }
-           } else if (!isLight && nEl.density < el.density) {
-              if (Math.random() < 0.4) {
+           } else if (density > nEl.density) {
+              // I am heavier than neighbor, try to go down
+              if (dy > 0 && Math.random() < 0.5) {
                 this.swapPixels(x, y, tx, ty);
                 return;
-             }
+              }
            }
         }
       }
