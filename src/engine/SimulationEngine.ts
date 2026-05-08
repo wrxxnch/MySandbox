@@ -21,6 +21,7 @@ export class SimulationEngine {
   public elements: Map<string, ElementProperties> = new Map();
   public elementList: ElementProperties[] = [];
   public viewMode: ViewMode = ViewMode.NORMAL;
+  public ambientHeatEnabled: boolean = true;
   
   // Buffers for visualization
   public imageData: ImageData;
@@ -262,7 +263,8 @@ export class SimulationEngine {
         }
 
         // Conduction at Life 3 or 4 (sources always spark)
-        if (el && (life === 3 || (life === 4 && el.isSource)) && el.conductivity > 0) {
+        // Metal elements shouldn't be sparked by fire/embers/non-source materials
+        if (el && (life === 3 || (life === 4 && el.isSource)) && el.conductivity > 0 && el.id !== 'fire' && el.id !== 'embr' && el.id !== 'lava') {
            const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
            for (const [dx, dy] of neighbors) {
              const nx = x + dx;
@@ -297,7 +299,7 @@ export class SimulationEngine {
         
         // Dissipation to environment (Ambient return)
         // Sensors don't lose temp to environment
-        if (el && el.category !== 'sensors') {
+        if (this.ambientHeatEnabled && el && el.category !== 'sensors') {
           const ROOM_TEMP = 293.15;
           const dissipationRate = 0.005; // Global cooling/warming factor to return to normal
           this.nextTempGrid[idx] += (ROOM_TEMP - this.tempGrid[idx]) * dissipationRate;
@@ -309,6 +311,10 @@ export class SimulationEngine {
             const ny = y + dy;
             if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
             const nIdx = ny * this.width + nx;
+            
+            // If ambient heat is disabled, don't transfer to/from air (id 0)
+            if (!this.ambientHeatEnabled && (this.grid[idx] === 0 || this.grid[nIdx] === 0)) continue;
+
             const nEl = this.elementList[this.grid[nIdx]];
             const otherTC = nEl?.thermalConductivity ?? 0.02;
             

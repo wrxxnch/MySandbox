@@ -221,6 +221,7 @@ export default function App() {
   const [isMagnifierActive, setIsMagnifierActive] = useState(false);
   const [isZPressed, setIsZPressed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [ambientHeatEnabled, setAmbientHeatEnabled] = useState(true);
   const [fixedMagnifierPos, setFixedMagnifierPos] = useState<{x: number, y: number} | null>(null);
   const [magnifierScale, setMagnifierScale] = useState(4);
   const [showSettings, setShowSettings] = useState(false);
@@ -323,6 +324,10 @@ export default function App() {
   useEffect(() => {
     if (engineRef.current) engineRef.current.viewMode = viewMode;
   }, [viewMode]);
+
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.ambientHeatEnabled = ambientHeatEnabled;
+  }, [ambientHeatEnabled]);
 
   const formatTempHUD = (k: number) => formatTemp(k, tempUnit);
 
@@ -656,6 +661,15 @@ export default function App() {
                         <button key={u} onClick={() => setTempUnit(u as any)} className={cn("py-2 rounded border text-[10px] uppercase font-bold", tempUnit === u ? "bg-white/20 border-white/20" : "bg-white/5 border-white/5 text-white/40")}>{u}</button>
                       ))}
                    </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                   <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Simulation Settings</h3>
+                   <EditorToggle 
+                     label="Ambient Heat Transfer" 
+                     value={ambientHeatEnabled} 
+                     onChange={setAmbientHeatEnabled} 
+                   />
                 </div>
               </div>
             </motion.div>
