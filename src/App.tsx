@@ -1562,37 +1562,62 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         </div>
         
         {showJson ? (
-          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4 min-h-[800px]">
+          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-6 min-h-[850px] bg-[#0c0c0c]">
              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400">Raw Element Data Definition</h3>
-                <span className="text-[10px] text-white/20 italic font-mono bg-white/5 px-2 py-1 rounded border border-white/5">JSON Blueprint Mode</span>
-             </div>
-             <textarea 
-                className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl p-8 font-mono text-sm leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10"
-                value={JSON.stringify(formData, null, 2)}
-                spellCheck={false}
-                onChange={(e) => {
-                   try {
-                      const parsed = JSON.parse(e.target.value);
-                      setFormData(parsed);
-                   } catch(err) {
-                      // Silent catch for live editing
-                   }
-                }}
-             />
-             <div className="pt-6 border-t border-white/5">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-[11px] text-blue-400/60 font-medium font-mono tracking-tighter">ENGINE VALIDATION: READY</p>
-                    <p className="text-[10px] text-white/20 max-w-sm">Changes here are processed in real-time. Ensure numerical syntax is strictly valid.</p>
-                  </div>
+                <div className="flex flex-col">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-blue-400 font-mono">Engine Blueprint Architecture</h3>
+                  <p className="text-[10px] text-white/30 italic">Direct JSON memory manipulation mode</p>
+                </div>
+                <div className="flex gap-4 items-center">
                   <button 
-                      onClick={handleSubmit}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-12 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-3 group whitespace-nowrap text-base"
+                    onClick={() => {
+                      if (window.confirm("RESET CANVAS simulation? This will clear all pixels.")) {
+                        if (engineRef.current) engineRef.current.clear();
+                      }
+                    }}
+                    className="px-3 py-1 bg-red-600/10 text-red-400 text-[10px] font-bold uppercase rounded border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center gap-1.5"
                   >
-                      <Zap size={20} className="group-hover:animate-pulse" />
-                      Apply & Sync Blueprint
+                    <Trash2 size={12} /> Clear Simulation
                   </button>
+                  <span className="text-[10px] text-white/20 italic font-mono bg-white/5 px-3 py-1.5 rounded border border-white/5 shadow-inner">SYSTEM_MODE: FULL_ARRAY_WRITE</span>
+                </div>
+             </div>
+             <div className="flex-1 relative group">
+               <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                <textarea 
+                  className="relative w-full h-full bg-black/60 border border-white/10 rounded-xl p-10 font-mono text-sm leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10 shadow-2xl selection:bg-blue-500/30"
+                  value={JSON.stringify(elements, null, 2)}
+                  spellCheck={false}
+                  onChange={(e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.value);
+                        if (Array.isArray(parsed)) setElements(parsed);
+                    } catch(err) {
+                        // Silent catch for live editing
+                    }
+                  }}
+                />
+             </div>
+             <div className="pt-6 border-t border-white/5">
+                <div className="flex items-center justify-between gap-8">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <p className="text-xs text-blue-400 font-bold font-mono tracking-tighter">DATA SYNC: ACTIVE</p>
+                    </div>
+                    <p className="text-[11px] text-white/40 max-w-xl leading-relaxed">
+                      You are editing the live <span className="text-white/60 font-mono">BASE_ELEMENTS</span> array. Any changes to JSON properties like <span className="text-blue-300/60">state</span>, <span className="text-blue-300/60">density</span>, or <span className="text-blue-300/60">boilingPoint</span> will take effect immediately in the physics engine.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button 
+                        onClick={() => setShowJson(false)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-12 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-3 group whitespace-nowrap text-base"
+                    >
+                        <Zap size={20} className="group-hover:animate-pulse" />
+                        Exit & Save
+                    </button>
+                  </div>
                 </div>
               </div>
           </div>

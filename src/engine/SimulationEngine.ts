@@ -926,68 +926,76 @@ export class SimulationEngine {
        return; 
     }
 
-    // Determine move priorities based on density
-    // Negative density = rises. Positive density = falls. 0 = static vertical.
-    // Magnitude = speed/priority.
-    const absDensity = Math.abs(density);
     const side = Math.random() > 0.5 ? 1 : -1;
     const vert = Math.random() > 0.5 ? 1 : -1;
     
-    let targets: [number, number][] = [];
+    // Support for multiple movements per frame for high buoyancy/weight (gases only)
+    const absDensity = Math.abs(density);
+    // Use floor of abs density as speed multiplier, min 1
+    const moveIterations = Math.max(1, Math.min(8, Math.floor(absDensity)));
     
-    if (density < 0) {
-      // Buoyant: rises
-      // If density is very negative (e.g. -5), prioritize up more.
-      // If density is -1, mix with side moves.
-      const riseBias = Math.min(0.9, absDensity * 0.2); 
-      if (Math.random() < riseBias) {
-        targets = [[0, -1], [side, -1], [-side, -1], [side, 0], [-side, 0]];
-      } else {
-        targets = [[side, 0], [-side, 0], [0, -1], [side, -1], [0, 1]];
-      }
-    } else if (density > 0) {
-      // Heavy gas: falls
-      const fallBias = Math.min(0.9, absDensity * 0.2);
-      if (Math.random() < fallBias) {
-        targets = [[0, 1], [side, 1], [-side, 1], [side, 0], [-side, 0]];
-      } else {
-        targets = [[side, 0], [-side, 0], [0, 1], [side, 1], [0, -1]];
-      }
-    } else {
-      // Static vertical (density 0): random in all directions
-      targets = [[side, 0], [-side, 0], [0, 1], [0, -1], [side, vert], [-side, vert]];
-    }
-
-    for (const [dx, dy] of targets) {
-      const tx = x + dx;
-      const ty = y + dy;
-      if (tx < 0 || tx >= this.width || ty < 0 || ty >= this.height) continue;
+    for (let iter = 0; iter < moveIterations; iter++) {
+      let targets: [number, number][] = [];
       
-      const nIdx = ty * this.width + tx;
-      const nElIdx = this.grid[nIdx];
-      
-      if (nElIdx === 0) {
-        this.movePixel(x, y, tx, ty, elIdx);
-        return;
+      if (density < 0) {
+        // Buoyant: rises. Higher negative density = more aggressive rise.
+        // Magnitude (absDensity) now also drives iteration count for speed.
+        if (Math.random() < 0.85) {
+          targets = [[0, -1], [side, -1], [-side, -1], [side, 0], [-side, 0]];
+        } else {
+          targets = [[side, 0], [-side, 0], [0, -1], [side, -1], [0, 1]];
+        }
+      } else if (density > 0) {
+        // Heavy gas: falls. Higher density = more aggressive fall.
+        if (Math.random() < 0.85) {
+          targets = [[0, 1], [side, 1], [-side, 1], [side, 0], [-side, 0]];
+        } else {
+          targets = [[side, 0], [-side, 0], [0, 1], [side, 1], [0, -1]];
+        }
       } else {
-        const nEl = this.elementList[nElIdx];
-        if (nEl && (nEl.state === PhysicalState.LIQUID || nEl.state === PhysicalState.GAS)) {
-           // Swap check
-           if (density < nEl.density) {
-              // I am lighter than neighbor, try to go up
-              if (dy < 0 && Math.random() < 0.5) {
-                 this.swapPixels(x, y, tx, ty);
-                 return;
-              }
-           } else if (density > nEl.density) {
-              // I am heavier than neighbor, try to go down
-              if (dy > 0 && Math.random() < 0.5) {
-                this.swapPixels(x, y, tx, ty);
-                return;
-              }
-           }
+        // Density 0: TRUE random Brownian movement in all directions
+        targets = [[0, -1], [0, 1], [1, 0], [-1, 0], [side, vert], [-side, -vert]];
+        // Shuffle to ensure unbiased random walk
+        for (let i = targets.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [targets[i], targets[j]] = [targets[j], targets[i]];
         }
       }
+
+      let moved = false;
+      for (const [dx, dy] of targets) {
+        const tx = x + dx;
+        const ty = y + dy;
+        if (tx < 0 || tx >= this.width || ty < 0 || ty >= this.height) continue;
+        
+        const nIdx = ty * this.width + tx;
+        const nElIdx = this.grid[nIdx];
+        
+        if (nElIdx === 0) {
+          // Check if destination is also empty in nextGrid
+          if (this.nextGrid[nIdx] === 0) {
+             this.movePixel(x, y, tx, ty, elIdx);
+             x = tx; y = ty; // Update current position if we were to loop
+             moved = true;
+             break;
+          }
+        } else {
+          const nEl = this.elementList[nElIdx];
+          if (nEl && (nEl.state === PhysicalState.LIQUID || nEl.state === PhysicalState.GAS)) {
+             // Swap check: Always swap if I am lighter (lower density) and trying to go UP
+             // OR if I am heavier (higher density) and trying to go DOWN
+             const shouldSwap = (density < nEl.density && dy < 0) || (density > nEl.density && dy > 0);
+             
+             if (shouldSwap && Math.random() < 0.6) {
+                this.swapPixels(x, y, tx, ty);
+                x = tx; y = ty;
+                moved = true;
+                break;
+             }
+          }
+        }
+      }
+      if (!moved) break;
     }
   }
 
