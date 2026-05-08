@@ -1374,6 +1374,7 @@ export default function App() {
                   <ElementEditor 
                      elements={elements}
                      tempUnit={tempUnit}
+                     engineRef={engineRef}
                      onClose={() => {
                         setIsEditorOpen(false);
                         setEditingElement(null);
@@ -1438,7 +1439,14 @@ function EditorToggle({ label, value, onChange }: { label: string, value: boolea
 
 // --- Element Editor Component ---
 
-function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { elements: ElementProperties[], tempUnit: 'K' | 'C' | 'F', onClose: () => void, onAdd: (el: ElementProperties) => void, initialData?: Partial<ElementProperties> }) {
+function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engineRef }: { 
+  elements: ElementProperties[], 
+  tempUnit: 'K' | 'C' | 'F', 
+  onClose: () => void, 
+  onAdd: (el: ElementProperties) => void, 
+  initialData?: Partial<ElementProperties>,
+  engineRef: React.RefObject<SimulationEngine | null>
+}) {
   const [showJson, setShowJson] = useState(false);
   const [formData, setFormData] = useState<Partial<ElementProperties>>({
     name: 'New Element',
@@ -1562,7 +1570,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         </div>
         
         {showJson ? (
-          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-6 min-h-[900px] bg-[#0c0c0c]">
+          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-6 min-h-[950px] bg-[#0c0c0c]">
              <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <h3 className="text-sm font-bold uppercase tracking-widest text-blue-400 font-mono">Engine Blueprint Architecture</h3>
@@ -1585,7 +1593,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
              <div className="flex-1 relative group">
                <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
                 <textarea 
-                  className="relative w-full h-full bg-black/60 border border-white/10 rounded-xl p-10 font-mono text-sm leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10 shadow-2xl selection:bg-blue-500/30"
+                  className="relative w-full h-full bg-black/60 border border-white/10 rounded-xl p-6 font-mono text-base leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10 shadow-2xl selection:bg-blue-500/30"
                   value={JSON.stringify(formData, null, 2)}
                   spellCheck={false}
                   onChange={(e) => {
@@ -1803,12 +1811,38 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
             
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-white/40">Conductivity (0-1)</label>
-                  <input type="number" step="0.1" min="0" max="1" value={formData.conductivity} onChange={e => setFormData({...formData, conductivity: parseFloat(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
+                  <label className="text-[10px] uppercase font-bold text-white/40">Conductivity (0-100)</label>
+                  <input 
+                    type="number" 
+                    step="1" 
+                    min="0" 
+                    max="100" 
+                    value={Math.round((formData.conductivity || 0) * 100)} 
+                    onChange={e => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val)) {
+                        setFormData({...formData, conductivity: val / 100});
+                      }
+                    }} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
+                  />
                </div>
                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-white/40">Heat Cond. (0-1)</label>
-                  <input type="number" step="0.1" min="0" max="5" value={formData.thermalConductivity} onChange={e => setFormData({...formData, thermalConductivity: parseFloat(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
+                  <label className="text-[10px] uppercase font-bold text-white/40">Heat Cond. (0-100)</label>
+                  <input 
+                    type="number" 
+                    step="1" 
+                    min="0" 
+                    max="100" 
+                    value={Math.round((formData.thermalConductivity || 0) * 100)} 
+                    onChange={e => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val)) {
+                        setFormData({...formData, thermalConductivity: val / 100});
+                      }
+                    }} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"
+                  />
                </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

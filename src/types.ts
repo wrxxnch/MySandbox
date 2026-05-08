@@ -30,7 +30,7 @@ export interface ElementProperties {
   vaporElementId?: string; // What it turns into when boiling
   congealElementId?: string; // What it turns into when freezing
   conductivity: number; // Electrical 0 to 1
-  thermalConductivity: number; // Heat 0 to 1
+  thermalConductivity: number; // Heat 0 to 100 (scaled as 0-1 internally)
   flammability?: number;
   fuel?: number;
   burnSpeed?: number;
