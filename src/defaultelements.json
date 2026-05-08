@@ -776,7 +776,7 @@
     "abbreviation": "",
     "color": "#DDDD66",
     "state": "gas",
-    "density": 0.1,
+    "density": -1,
     "acidity": 7,
     "boilingPoint": 10000,
     "freezingPoint": 0,
