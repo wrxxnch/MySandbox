@@ -678,21 +678,32 @@
     "category": "liquids",
     "reactions": []
   },
-  {
-    "id": "acid",
-    "name": "Acid",
-    "color": "#ADFF2F",
-    "state": "liquid",
-    "density": 6,
-    "acidity": 1,
-    "boilingPoint": 500,
-    "freezingPoint": 200,
-    "conductivity": 0.5,
-    "thermalConductivity": 0.1,
-    "isExplosive": false,
-    "category": "liquids",
-    "reactions": []
-  },
+ {
+  "name": "Acid",
+  "abbreviation": "",
+  "color": "#ADFF2F",
+  "state": "liquid",
+  "density": 6,
+  "acidity": 1,
+  "boilingPoint": 500,
+  "freezingPoint": 200,
+  "vaporElementId": "",
+  "congealElementId": "",
+  "conductivity": 0.5,
+  "isExplosive": false,
+  "explosiveTrigger": "temp",
+  "category": "liquids",
+  "reactions": [
+    {
+      "targetElementId": "water",
+      "chance": 1,
+      "transformIntoId": "custom-1778127955087",
+      "producesElementId": "empty"
+    }
+  ],
+  "thermalConductivity": 0.1,
+  "id": "acid"
+},
   {
     "id": "custom-1778127955087",
     "name": "Caustic Gas",
