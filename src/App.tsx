@@ -1514,9 +1514,9 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         animate={{ 
           scale: 1, 
           y: 0,
-          maxWidth: showJson ? '1500px' : '896px'
+          maxWidth: showJson ? '1600px' : '896px'
         }}
-        className="bg-[#151515] border border-white/10 rounded-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[96vh] transition-[max-width] duration-300"
+        className="bg-[#151515] border border-white/10 rounded-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[98vh] transition-[max-width,max-height] duration-300"
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#1a1a1a]">
            <div>
@@ -1562,13 +1562,13 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         </div>
         
         {showJson ? (
-          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4 min-h-[750px]">
+          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4 min-h-[800px]">
              <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400">Raw Element Data Definition</h3>
-                <span className="text-[10px] text-white/20 italic font-mono bg-white/5 px-2 py-1 rounded">JSON Interface v1.0</span>
+                <span className="text-[10px] text-white/20 italic font-mono bg-white/5 px-2 py-1 rounded border border-white/5">JSON Blueprint Mode</span>
              </div>
              <textarea 
-                className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl p-6 font-mono text-xs leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10"
+                className="flex-1 w-full bg-black/40 border border-white/10 rounded-xl p-8 font-mono text-sm leading-relaxed text-blue-300 outline-none focus:ring-2 focus:ring-blue-500/40 resize-none scrollbar-thin scrollbar-thumb-white/10"
                 value={JSON.stringify(formData, null, 2)}
                 spellCheck={false}
                 onChange={(e) => {
@@ -1576,19 +1576,22 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
                       const parsed = JSON.parse(e.target.value);
                       setFormData(parsed);
                    } catch(err) {
-                      // Silently fail or simple border red?
+                      // Silent catch for live editing
                    }
                 }}
              />
              <div className="pt-6 border-t border-white/5">
                 <div className="flex items-center justify-between gap-4">
-                  <p className="text-[10px] text-white/30 max-w-sm">Warning: Changes here are instant. Ensure the JSON schema remains valid to avoid simulation instability.</p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[11px] text-blue-400/60 font-medium font-mono tracking-tighter">ENGINE VALIDATION: READY</p>
+                    <p className="text-[10px] text-white/20 max-w-sm">Changes here are processed in real-time. Ensure numerical syntax is strictly valid.</p>
+                  </div>
                   <button 
                       onClick={handleSubmit}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-12 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-3 group whitespace-nowrap text-base"
                   >
-                      <Zap size={18} className="group-hover:animate-pulse" />
-                      Commit Changes
+                      <Zap size={20} className="group-hover:animate-pulse" />
+                      Apply & Sync Blueprint
                   </button>
                 </div>
               </div>

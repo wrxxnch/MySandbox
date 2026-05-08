@@ -473,41 +473,60 @@ export class SimulationEngine {
     }
 
     // State Transitions
-    // Hysteresis: add a small buffer (0.5 to 2.0 degrees) to prevent instant oscillation
-    if (element.boilingPoint > 0 && currentTemp >= (element.boilingPoint + 2.0) && element.vaporElementId) {
+    // Hysteresis: add a larger buffer to prevent rapid oscillation
+    const boilThreshold = element.boilingPoint + 5.0;
+    const freezeThreshold = element.freezingPoint - 5.0;
+
+    if (element.boilingPoint > 0 && currentTemp >= boilThreshold && element.vaporElementId) {
        let targetIdx = this.elementList.findIndex(e => e.id === element.vaporElementId);
-       // Use ctype if available and valid
+       
+       // ctype memory: if we have ctype, it might be the preferred vapor (or liquid we came from)
        if (this.ctypeGrid[idx] !== 0) {
           const ctypeIdx = this.ctypeGrid[idx];
           const ctypeEl = this.elementList[ctypeIdx];
-          // Only revert to ctype if it matches the vapor's intention (optional safeguard)
+          // If we came FROM a gas and are boiling BACK into it, use that specific gas
           if (ctypeEl && ctypeEl.state === PhysicalState.GAS) {
             targetIdx = ctypeIdx;
+            this.nextCtypeGrid[idx] = 0; // Clear memory as we used it
+          } else {
+            // Otherwise, we are turning into vapor, so remember our current liquid state
+            this.nextCtypeGrid[idx] = elIdx;
           }
-          this.nextCtypeGrid[idx] = 0; 
+       } else {
+          // No ctype, so remember current state
+          this.nextCtypeGrid[idx] = elIdx;
        }
+
        if (targetIdx >= 0) {
           this.nextGrid[idx] = targetIdx;
-          this.nextCtypeGrid[idx] = elIdx; // Save previous state to allow clean revert
-          this.nextTempGrid[idx] = currentTemp + 10.0; // Kick temp up
+          this.nextTempGrid[idx] = currentTemp + 5.0; // Moderate kick up
           return;
        }
     }
-    if (element.freezingPoint > 0 && currentTemp <= (element.freezingPoint - 2.0) && element.congealElementId) {
+
+    if (element.freezingPoint > 0 && currentTemp <= freezeThreshold && element.congealElementId) {
        let targetIdx = this.elementList.findIndex(e => e.id === element.congealElementId);
-       // Use ctype if available
+       
+       // ctype memory: if we have ctype, it might be the preferred liquid (or solid we came from)
        if (this.ctypeGrid[idx] !== 0) {
           const ctypeIdx = this.ctypeGrid[idx];
           const ctypeEl = this.elementList[ctypeIdx];
-          if (ctypeEl) {
-             targetIdx = ctypeIdx;
+          // If we came FROM a liquid/solid and are cooling BACK into it, use that specific one
+          if (ctypeEl && (ctypeEl.state === PhysicalState.LIQUID || ctypeEl.state === PhysicalState.SOLID)) {
+            targetIdx = ctypeIdx;
+            this.nextCtypeGrid[idx] = 0; // Clear memory
+          } else {
+            // Remember current state (gas) when turning into liquid
+            this.nextCtypeGrid[idx] = elIdx;
           }
-          this.nextCtypeGrid[idx] = 0;
+       } else {
+          // No ctype, remember current state
+          this.nextCtypeGrid[idx] = elIdx;
        }
+
        if (targetIdx >= 0) {
           this.nextGrid[idx] = targetIdx;
-          this.nextCtypeGrid[idx] = elIdx; // Save previous state
-          this.nextTempGrid[idx] = currentTemp - 10.0; // Kick temp down
+          this.nextTempGrid[idx] = currentTemp - 5.0; // Moderate kick down
           return;
        }
     }
