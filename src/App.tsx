@@ -1514,9 +1514,9 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         animate={{ 
           scale: 1, 
           y: 0,
-          maxWidth: showJson ? '1200px' : '896px' // max-w-7xl vs max-w-4xl
+          maxWidth: showJson ? '1500px' : '896px'
         }}
-        className="bg-[#151515] border border-white/10 rounded-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-[max-width] duration-300"
+        className="bg-[#151515] border border-white/10 rounded-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[96vh] transition-[max-width] duration-300"
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#1a1a1a]">
            <div>
@@ -1562,7 +1562,7 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData }: { el
         </div>
         
         {showJson ? (
-          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4 min-h-[500px]">
+          <div className="flex-1 overflow-hidden p-8 flex flex-col gap-4 min-h-[750px]">
              <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400">Raw Element Data Definition</h3>
                 <span className="text-[10px] text-white/20 italic font-mono bg-white/5 px-2 py-1 rounded">JSON Interface v1.0</span>

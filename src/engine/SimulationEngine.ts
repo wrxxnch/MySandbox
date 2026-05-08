@@ -192,7 +192,15 @@ export class SimulationEngine {
       this.tempGrid[index] = options.temp;
     } else if (elIndex >= 0) {
       const el = this.elementList[elIndex];
-      this.tempGrid[index] = el.baseTemperature !== undefined ? el.baseTemperature : 293.15;
+      if (el.baseTemperature !== undefined) {
+        this.tempGrid[index] = el.baseTemperature;
+      } else {
+        // Fallbacks for common elements without baseTemperature
+        if (el.id === 'fire') this.tempGrid[index] = 673.15;
+        else if (el.id === 'lava') this.tempGrid[index] = 1473.15;
+        else if (el.id === 'steam' || el.name.toLowerCase().includes('vapor')) this.tempGrid[index] = 373.15;
+        else this.tempGrid[index] = 293.15;
+      }
     }
     
     if (options.ctype) {
@@ -465,27 +473,41 @@ export class SimulationEngine {
     }
 
     // State Transitions
-    if (element.boilingPoint > 0 && currentTemp >= element.boilingPoint && element.vaporElementId) {
+    // Hysteresis: add a small buffer (0.5 to 2.0 degrees) to prevent instant oscillation
+    if (element.boilingPoint > 0 && currentTemp >= (element.boilingPoint + 2.0) && element.vaporElementId) {
        let targetIdx = this.elementList.findIndex(e => e.id === element.vaporElementId);
-       // Use ctype if available
+       // Use ctype if available and valid
        if (this.ctypeGrid[idx] !== 0) {
-         targetIdx = this.ctypeGrid[idx];
-         this.nextCtypeGrid[idx] = 0; // Reset ctype after transition
+          const ctypeIdx = this.ctypeGrid[idx];
+          const ctypeEl = this.elementList[ctypeIdx];
+          // Only revert to ctype if it matches the vapor's intention (optional safeguard)
+          if (ctypeEl && ctypeEl.state === PhysicalState.GAS) {
+            targetIdx = ctypeIdx;
+          }
+          this.nextCtypeGrid[idx] = 0; 
        }
        if (targetIdx >= 0) {
           this.nextGrid[idx] = targetIdx;
+          this.nextCtypeGrid[idx] = elIdx; // Save previous state to allow clean revert
+          this.nextTempGrid[idx] = currentTemp + 10.0; // Kick temp up
           return;
        }
     }
-    if (element.freezingPoint > 0 && currentTemp <= element.freezingPoint && element.congealElementId) {
+    if (element.freezingPoint > 0 && currentTemp <= (element.freezingPoint - 2.0) && element.congealElementId) {
        let targetIdx = this.elementList.findIndex(e => e.id === element.congealElementId);
        // Use ctype if available
        if (this.ctypeGrid[idx] !== 0) {
-         targetIdx = this.ctypeGrid[idx];
-         this.nextCtypeGrid[idx] = 0;
+          const ctypeIdx = this.ctypeGrid[idx];
+          const ctypeEl = this.elementList[ctypeIdx];
+          if (ctypeEl) {
+             targetIdx = ctypeIdx;
+          }
+          this.nextCtypeGrid[idx] = 0;
        }
        if (targetIdx >= 0) {
           this.nextGrid[idx] = targetIdx;
+          this.nextCtypeGrid[idx] = elIdx; // Save previous state
+          this.nextTempGrid[idx] = currentTemp - 10.0; // Kick temp down
           return;
        }
     }
@@ -956,6 +978,10 @@ export class SimulationEngine {
 
     const el1 = this.grid[idx1];
     const el2 = this.grid[idx2];
+    
+    // Safety check: Don't swap if either pixel has already been modified in this step
+    // or if the source pixel no longer matches its expected state (already moved)
+    if (this.nextGrid[idx1] !== el1 || this.nextGrid[idx2] !== el2) return;
     
     this.nextGrid[idx1] = el2;
     this.nextGrid[idx2] = el1;
