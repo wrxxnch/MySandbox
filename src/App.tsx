@@ -1723,6 +1723,10 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engine
                   <label className="text-[10px] uppercase font-bold text-white/40">Density</label>
                   <input type="number" value={formData.density} onChange={e => setFormData({...formData, density: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
                </div>
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40">Acidity (0-14)</label>
+                  <input type="number" step="0.1" min="0" max="14" value={formData.acidity} onChange={e => setFormData({...formData, acidity: parseFloat(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
+               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1897,14 +1901,25 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engine
                    <div className="grid grid-cols-2 gap-3 pt-2">
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">If touches</label>
-                        <select 
-                          value={reaction.targetElementId} 
-                          onChange={e => updateReaction(i, 'targetElementId', e.target.value)}
-                          className="w-full bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
-                        >
-                          <option value="empty">Air (Empty)</option>
-                          {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
-                        </select>
+                        <div className="flex gap-2 items-center">
+                          <select 
+                            value={reaction.targetElementId} 
+                            onChange={e => updateReaction(i, 'targetElementId', e.target.value)}
+                            className="flex-1 bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
+                          >
+                            <option value="empty">Air (Empty)</option>
+                            {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
+                          </select>
+                          <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
+                            <input 
+                              type="checkbox" 
+                              checked={reaction.isExclude} 
+                              onChange={e => updateReaction(i, 'isExclude', e.target.checked)}
+                              className="w-3 h-3 accent-blue-500"
+                            />
+                            <span className="text-[9px] text-white/40 uppercase font-bold">Exclude</span>
+                          </label>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">Transforms to</label>
@@ -1946,6 +1961,15 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engine
                           type="number" placeholder="None"
                           value={reaction.minTemp || ''} 
                           onChange={e => updateReaction(i, 'minTemp', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase font-bold text-white/20">Req. Acidity (0-14)</label>
+                        <input 
+                          type="number" placeholder="None"
+                          value={reaction.requiredAcidity || ''} 
+                          onChange={e => updateReaction(i, 'requiredAcidity', e.target.value ? parseFloat(e.target.value) : undefined)}
                           className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
                         />
                       </div>
