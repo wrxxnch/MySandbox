@@ -769,6 +769,9 @@ export class SimulationEngine {
               const finalMatch = reaction.isExclude ? !isMatch : isMatch;
 
               if (finalMatch) {
+                 // Check Required Acidity
+                 if (reaction.requiredAcidity !== undefined && Math.abs(nEl.acidity - reaction.requiredAcidity) > 0.1) continue;
+
                  // Check Temperature Thresholds
                  if (reaction.minTemp !== undefined && currentTemp < reaction.minTemp) continue;
                  if (reaction.maxTemp !== undefined && currentTemp > reaction.maxTemp) continue;
