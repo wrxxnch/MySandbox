@@ -9,7 +9,7 @@ export interface ElementReaction {
   targetElementId: string; // The element it touches
   isExclude?: boolean; // If true, matches any element EXCEPT this targetID
   chance: number; // 0 to 1
-  transformIntoId: string; // What the current element becomes
+  transformIntoId?: string; // What the current element becomes (optional for "No Change")
   producesElementId?: string; // What the target element becomes (optional)
   extraSpawnIds?: string[]; // Extra elements to spawn in nearby empty space
   minTemp?: number;
