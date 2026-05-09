@@ -1924,12 +1924,12 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engine
                       <div className="space-y-1">
                         <label className="text-[9px] uppercase font-bold text-white/20">Transforms to</label>
                         <select 
-                          value={reaction.transformIntoId} 
-                          onChange={e => updateReaction(i, 'transformIntoId', e.target.value)}
+                          value={reaction.transformIntoId || 'no_change'} 
+                          onChange={e => updateReaction(i, 'transformIntoId', e.target.value === 'no_change' ? undefined : e.target.value)}
                           className="w-full bg-[#1a1a1a] border border-white/5 rounded p-1 text-[11px]"
                         >
+                          <option value="no_change">No Change</option>
                           <option value="empty">Air (Empty)</option>
-                          <option value={formData.id}>[Self] {formData.name}</option>
                           {elements.map(el => <option key={el.id} value={el.id}>{el.name}</option>)}
                         </select>
                       </div>
