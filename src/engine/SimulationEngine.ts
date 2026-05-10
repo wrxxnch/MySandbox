@@ -540,30 +540,34 @@ export class SimulationEngine {
     const state = element.state;
     const p = this.pressureGrid[idx];
 
-    // Pressure movement (Wind effect)
-    if (Math.abs(p) > 0.5 && state !== PhysicalState.SOLID) {
+    // Pressure movement (Push from high pressure / Pull into vacuum)
+    if (Math.abs(p) > 0.2 && state !== PhysicalState.SOLID) {
         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-        let maxDiff = 0;
+        let maxGrad = 0;
         let pTarget = -1;
+        
         for (const [dx, dy] of neighbors) {
             const nx = x + dx;
             const ny = y + dy;
             if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
             const nIdx = ny * this.width + nx;
-            const diff = p - this.pressureGrid[nIdx];
-            if (diff > maxDiff) {
+            const nP = this.pressureGrid[nIdx];
+            
+            // Pressure gradient: move from high P to low P
+            const gradient = p - nP;
+            if (gradient > maxGrad) {
                 const targetElIdx = this.grid[nIdx];
                 const targetEl = this.elementList[targetElIdx];
-                // Can move into air OR something less dense if pressure is high
+                // Can move into air OR something less dense
                 if (targetElIdx === 0 || (targetEl && targetEl.density < element.density)) {
-                   maxDiff = diff;
+                   maxGrad = gradient;
                    pTarget = nIdx;
                 }
             }
         }
         
         if (pTarget !== -1) {
-            const moveChance = Math.min(Math.abs(p) * 0.2, 1.0);
+            const moveChance = Math.min(maxGrad * 0.5, 1.0);
             if (Math.random() < moveChance) {
                 const tx = pTarget % this.width;
                 const ty = Math.floor(pTarget / this.width);
@@ -776,6 +780,10 @@ export class SimulationEngine {
                  if (reaction.minTemp !== undefined && currentTemp < reaction.minTemp) continue;
                  if (reaction.maxTemp !== undefined && currentTemp > reaction.maxTemp) continue;
 
+                 // Check Pressure Thresholds
+                 if (reaction.minPressure !== undefined && p < reaction.minPressure) continue;
+                 if (reaction.maxPressure !== undefined && p > reaction.maxPressure) continue;
+
                  if (Math.random() < reaction.chance) {
                     const transIdx = this.elementList.findIndex(e => e.id === reaction.transformIntoId);
                     if (transIdx >= 0) this.nextGrid[idx] = transIdx;
@@ -863,6 +871,12 @@ export class SimulationEngine {
 
   private handleLiquid(x: number, y: number, elIdx: number) {
     const el = this.elementList[elIdx];
+    const viscosity = el.viscosity || 0;
+    
+    // Viscosity chance: higher viscosity means less likely to move laterally/diagonally
+    const canMove = Math.random() > (viscosity / 100);
+    if (!canMove) return;
+
     const canFall = y < this.height - 1;
     const below = canFall ? (y + 1) * this.width + x : -1;
     
@@ -882,11 +896,11 @@ export class SimulationEngine {
       }
     }
 
-    // 3. Can flow diagonally downwards?
+    // 3. Can flow diagonally downwards or deep horizontal searching for gaps
     if (canFall) {
       const dir = Math.random() > 0.5 ? 1 : -1;
-      const targetsY = [dir, -dir];
-      for (const d of targetsY) {
+      const targets = [dir, -dir];
+      for (const d of targets) {
         const tx = x + d;
         const ty = y + 1;
         if (tx >= 0 && tx < this.width) {
@@ -899,25 +913,34 @@ export class SimulationEngine {
       }
     }
 
-    // 4. Randomized Horizontal Flow (Works on floor too!)
+    // 4. Horizontal Flow & Gap Filling
+    // High viscosity slows spread. Low viscosity spreads fast to fill gaps.
     const hDir = Math.random() > 0.5 ? 1 : -1;
+    const hRange = viscosity > 50 ? 1 : 3; // Spread further if low viscosity
+    
     const hTargets = [hDir, -hDir];
     for(const d of hTargets) {
-      const tx = x + d;
-      if (tx >= 0 && tx < this.width) {
+      for (let dist = 1; dist <= hRange; dist++) {
+        const tx = x + d * dist;
+        if (tx < 0 || tx >= this.width) break;
+        
         const nIdx = y * this.width + tx;
         if (this.grid[nIdx] === 0) {
           this.movePixel(x, y, tx, y, elIdx);
           return;
         }
-        // Lateral density swap (heavier liquid pushes aside lighter one)
+        
+        // Lateral density swap
         const nEl = this.elementList[this.grid[nIdx]];
         if (nEl && nEl.state === PhysicalState.LIQUID && nEl.density < el.density) {
-          if (Math.random() < 0.1) {
+          if (Math.random() < 0.1 / dist) {
             this.swapPixels(x, y, tx, y);
             return;
           }
+           break; // Stop horizontal search if blocked by liquid
         }
+        
+        if (nEl && nEl.state === PhysicalState.SOLID) break; // Blocked by solid
       }
     }
   }
