@@ -14,6 +14,8 @@ export interface ElementReaction {
   extraSpawnIds?: string[]; // Extra elements to spawn in nearby empty space
   minTemp?: number;
   maxTemp?: number;
+  minPressure?: number;
+  maxPressure?: number;
   requiredAcidity?: number;
 }
 
@@ -47,6 +49,7 @@ export interface ElementProperties {
   flatColor?: boolean;
   glow?: boolean;
   isRadiant?: boolean;
+  viscosity?: number; // 0 is normal, higher is more viscous
 }
 
 export interface Particle {
