@@ -60,21 +60,32 @@
     "isIndestructible": true
   },
   {
-    "id": "void",
-    "name": "Void",
-    "color": "#222222",
-    "state": "solid",
-    "density": 1000,
-    "acidity": 7,
-    "boilingPoint": 10000,
-    "freezingPoint": -1,
-    "conductivity": 0,
-    "thermalConductivity": 0.1,
-    "isExplosive": false,
-    "category": "special",
-    "reactions": [],
-    "isIndestructible": true
-  },
+  "name": "Void",
+  "abbreviation": "",
+  "color": "#222222",
+  "state": "solid",
+  "density": 1000,
+  "acidity": 7,
+  "boilingPoint": 10000,
+  "freezingPoint": -1,
+  "vaporElementId": "",
+  "congealElementId": "",
+  "conductivity": 0,
+  "isExplosive": false,
+  "explosiveTrigger": "temp",
+  "category": "special",
+  "reactions": [
+    {
+      "targetElementId": "void",
+      "chance": 1,
+      "isExclude": true,
+      "producesElementId": "empty"
+    }
+  ],
+  "thermalConductivity": 0.1,
+  "id": "void",
+  "isIndestructible": true
+},
   {
     "id": "heat",
     "name": "HEAT",
