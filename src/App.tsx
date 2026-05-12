@@ -1564,10 +1564,11 @@ export default function App() {
                        <div className="w-[1px] h-4 bg-white/10" />
                        <span className="text-[10px] font-mono text-white/40 min-w-[50px] uppercase truncate">{selectedDecoColor || 'Apagar'}</span>
                        <button 
-                        onClick={() => confirmDecoColor(selectedDecoColor)}
-                        className="h-8 px-2 bg-blue-600 rounded text-[9px] font-bold uppercase text-white hover:bg-blue-500 transition-colors"
+                         onClick={() => confirmDecoColor(selectedDecoColor)}
+                         className="h-8 px-2 bg-blue-600 rounded text-[9px] font-bold uppercase text-white hover:bg-blue-500 transition-colors flex items-center gap-1"
                        >
-                        OK
+                         <Plus size={10} />
+                         OK
                        </button>
                     </div>
                     {decoColorHistory.slice(0, 8).map(c => (
