@@ -1236,50 +1236,36 @@ export class SimulationEngine {
         if (i % this.width === 0) {
             // New row logic if needed, but ctx.fillRect is used below
         }
-        if (this.viewMode === ViewMode.HEAT) {
-            // Heat view: Blue -> Light Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Pink
-            // Air remains black
-            if (elIdx === 0) {
-              this.buffer[i] = 0xFF000000;
-              continue;
-            }
-            
+         if (this.viewMode === ViewMode.HEAT) {
+            // Heat view: Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Pink (9700C+)
             const tempC = temp - 273.15;
-            if (tempC < -150) finalColor = '#00008B'; // Dark Blue
-            else if (tempC < -50) finalColor = '#00BFFF'; // Light Blue
-            else if (tempC < 10) finalColor = '#00FFFF'; // Cyan
-            else if (tempC < 60) finalColor = '#00FF00'; // Green
+            if (tempC < -100) finalColor = '#0000FF'; // Blue
+            else if (tempC < 0) finalColor = '#00FFFF'; // Cyan
+            else if (tempC < 50) finalColor = '#00FF00'; // Green
             else if (tempC < 200) finalColor = '#FFFF00'; // Yellow
-            else if (tempC < 600) finalColor = '#FF8C00'; // Orange
-            else if (tempC < 2000) finalColor = '#FF0000'; // Red
-            else finalColor = '#FFC0CB'; // Pink (very hot)
+            else if (tempC < 1000) finalColor = '#FF8800'; // Orange
+            else if (tempC < 5000) finalColor = '#FF0000'; // Red
+            else finalColor = '#FF00FF'; // Pink (hot!)
         } else if (this.viewMode === ViewMode.PRESSURE) {
-            // Pressure view: High = Green, Vacuum = Blue -> Red
-            if (pressure > 0.5) {
-              // Scale green intensity?
-              finalColor = '#00FF00'; 
-            } else if (pressure < -0.1) {
-              // Vacuum: Blue for slight, Red for deep
-              const intensity = Math.min(Math.abs(pressure) / 10, 1.0);
-              finalColor = this.lerpColor('#0000FF', '#FF0000', intensity);
-            } else {
-              finalColor = '#000000';
-            }
+            // Pressure view: Green positive, Red vacuum, Blue slight vacuum
+            if (pressure > 0.5) finalColor = '#00FF00'; // Green (Wind/Pressure)
+            else if (pressure < -5.0) finalColor = '#FF0000'; // Red (High vacuum)
+            else if (pressure < -0.5) finalColor = '#0000FF'; // Blue (Low vacuum)
+            else finalColor = '#000000'; // Black (Neutral)
         } else if (this.viewMode === ViewMode.LIFE) {
-            // Life view: High (White/Light Grey) -> Low (Dark Grey)
+            // Life view: High (light gray) -> Low (black)
             if (elIdx !== 0 || life > 0) {
+              // Normalize life based on typical max (100 for fire/smke/embr, 4 for electricity)
               let intensity = 0;
-              if (life > 0) {
-                if (life > 4) {
-                  intensity = Math.min(life / 100, 1.0); // Fire/Smoke loop
-                } else {
-                  intensity = Math.min(life / 4, 1.0); // Electricity
-                }
+              if (life > 4) {
+                intensity = Math.min(life / 100, 1.0);
+              } else {
+                intensity = Math.min(life / 4, 1.0);
               }
-              const grey = Math.floor(64 + intensity * (255 - 64)); // Dark grey (64) to White (255)
+              const grey = Math.floor(50 + intensity * 150);
               finalColor = `rgb(${grey},${grey},${grey})`;
             } else {
-              finalColor = '#1a1a1a'; // Dark grey for "no life"
+              finalColor = '#000000';
             }
             if (typeof finalColor === 'string' && finalColor.startsWith('rgb')) {
                 const parts = finalColor.match(/\d+/g);
