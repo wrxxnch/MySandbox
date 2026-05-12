@@ -79,6 +79,7 @@ const CATEGORIES = [
   { id: 'life', name: 'Life', icon: Heart },
   { id: 'special', name: 'Special', icon: Star },
   { id: 'tools', name: 'Tools', icon: Hammer },
+  { id: 'paint', name: 'Pintar', icon: Edit },
   { id: 'custom', name: 'Custom', icon: UserIcon },
 ];
 
@@ -969,10 +970,37 @@ export default function App() {
                   </section>
                 )}
                 {activeSidebarTab === 'deco' && (
-                  <div className="grid grid-cols-6 gap-2">
-                    {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500'].map(c => (
-                      <button key={c} onClick={() => setSelectedDecoColor(c)} className="aspect-square rounded border border-white/10" style={{ backgroundColor: c }} />
-                    ))}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#8b4513', '#808080'].map(c => (
+                        <button 
+                          key={c} 
+                          onClick={() => setSelectedDecoColor(c)} 
+                          className={cn(
+                            "aspect-square rounded border transition-all",
+                            selectedDecoColor === c ? "border-white scale-110 shadow-lg" : "border-white/10"
+                          )} 
+                          style={{ backgroundColor: c }} 
+                        />
+                      ))}
+                      <div className="aspect-square rounded border border-white/10 relative overflow-hidden flex items-center justify-center bg-white/5">
+                        <Plus size={12} className="text-white/20 pointer-events-none" />
+                        <input 
+                          type="color" 
+                          value={selectedDecoColor}
+                          onChange={(e) => setSelectedDecoColor(e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (engineRef.current) engineRef.current.decoGrid.fill(0);
+                      }}
+                      className="w-full py-1.5 bg-red-600/10 text-red-400 text-[10px] font-bold uppercase rounded border border-red-500/20 hover:bg-red-500/20 flex items-center justify-center gap-1"
+                    >
+                      <Eraser size={12} /> Clear Deck
+                    </button>
                   </div>
                 )}
               </div>
@@ -1026,7 +1054,14 @@ export default function App() {
                         {CATEGORIES.map(cat => (
                           <button 
                             key={cat.id} 
-                            onClick={() => setSelectedCategory(cat.id)} 
+                            onClick={() => {
+                              setSelectedCategory(cat.id);
+                              if (cat.id === 'paint') {
+                                setActiveSidebarTab('deco');
+                              } else {
+                                setActiveSidebarTab('elements');
+                              }
+                            }} 
                             className={cn(
                               "aspect-square flex items-center justify-center rounded transition-all",
                               selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
@@ -1211,7 +1246,14 @@ export default function App() {
                         {CATEGORIES.map(cat => (
                           <button 
                             key={cat.id} 
-                            onClick={() => setSelectedCategory(cat.id)} 
+                            onClick={() => {
+                              setSelectedCategory(cat.id);
+                              if (cat.id === 'paint') {
+                                setActiveSidebarTab('deco');
+                              } else {
+                                setActiveSidebarTab('elements');
+                              }
+                            }} 
                             className={cn(
                               "aspect-square flex items-center justify-center rounded transition-all",
                               selectedCategory === cat.id ? "bg-white/20 text-white border border-white/20" : "text-white/40 hover:bg-white/5"
@@ -1361,11 +1403,6 @@ export default function App() {
                      </div>
                    )}
                    <div className="flex gap-3 items-center px-1">
-                     <div className="flex flex-col">
-                        <span className="text-[8px] text-white/40 uppercase font-bold leading-none mb-1">Brush</span>
-                        <input type="range" min="1" max="50" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-28 accent-blue-500 cursor-pointer h-1" />
-                     </div>
-                     <span className="text-[10px] font-mono text-white/60 min-w-[30px] bg-white/5 px-1.5 py-0.5 rounded border border-white/5">{brushSize}px</span>
                    </div>
                 </div>
                 
@@ -1760,6 +1797,10 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engine
                     className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white"
                   />
                </div>
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40">Viscosity (0-100)</label>
+                  <input type="number" min="0" max="100" value={formData.viscosity || 0} onChange={e => setFormData({...formData, viscosity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm"/>
+               </div>
             </div>
 
             <h3 className="text-xs font-bold uppercase tracking-widest text-red-500 border-b border-red-500/20 pb-2 pt-4">Combustion & Decay</h3>
@@ -1979,6 +2020,24 @@ function ElementEditor({ elements, tempUnit, onClose, onAdd, initialData, engine
                           type="number" placeholder="None"
                           value={reaction.maxTemp || ''} 
                           onChange={e => updateReaction(i, 'maxTemp', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase font-bold text-white/20">Min Press.</label>
+                        <input 
+                          type="number" placeholder="None"
+                          value={reaction.minPressure || ''} 
+                          onChange={e => updateReaction(i, 'minPressure', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase font-bold text-white/20">Max Press.</label>
+                        <input 
+                          type="number" placeholder="None"
+                          value={reaction.maxPressure || ''} 
+                          onChange={e => updateReaction(i, 'maxPressure', e.target.value ? parseFloat(e.target.value) : undefined)}
                           className="w-full bg-white/5 border border-white/5 rounded p-1 text-[11px]"
                         />
                       </div>
