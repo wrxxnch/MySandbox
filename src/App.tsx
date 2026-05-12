@@ -38,15 +38,12 @@ import {
   Hammer,
   Square,
   FileJson,
-  Edit,
-  Palette,
-  Pipette
+  Edit
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, loginWithGoogle, logout, saveCustomElements, loadUserElements } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { HexColorPicker } from 'react-colorful';
 
 // --- Utils ---
 
@@ -82,20 +79,8 @@ const CATEGORIES = [
   { id: 'life', name: 'Life', icon: Heart },
   { id: 'special', name: 'Special', icon: Star },
   { id: 'tools', name: 'Tools', icon: Hammer },
-  { id: 'paint', name: 'Pintar', icon: Palette },
+  { id: 'paint', name: 'Pintar', icon: Edit },
   { id: 'custom', name: 'Custom', icon: UserIcon },
-];
-
-const DECO_COLORS = [
-  '#ffffff', '#bfbfbf', '#808080', '#404040', '#000000',
-  '#ff0000', '#ff4d4d', '#cc0000', '#800000', '#4d0000',
-  '#00ff00', '#4dff4d', '#00cc00', '#008000', '#004d00',
-  '#0000ff', '#4d4dff', '#0000cc', '#000080', '#00004d',
-  '#ffff00', '#ffff4d', '#cccc00', '#808000', '#4d4d00',
-  '#ff00ff', '#ff4dff', '#cc00cc', '#800080', '#4d004d',
-  '#00ffff', '#4dffff', '#00cccc', '#008080', '#004d4d',
-  '#ffa500', '#ffb733', '#cc8400', '#805300', '#4d3200',
-  '#8b4513', '#a0522d', '#5d2e0d', '#3d1f09', '#1d0f04',
 ];
 
 const TemperatureInput = ({ 
@@ -228,7 +213,6 @@ export default function App() {
   const [wifiChannel, setWifiChannel] = useState<number>(1);
   const [activeSidebarTab, setActiveSidebarTab] = useState<'elements' | 'deco' | 'props'>('elements');
   const [selectedDecoColor, setSelectedDecoColor] = useState<string>('#ffffff');
-  const [decoColorHistory, setDecoColorHistory] = useState<string[]>(DECO_COLORS.slice(0, 10));
   const [user, setUser] = useState<User | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('powders');
   const [hudLayout, setHudLayout] = useState<'modern' | 'classic'>('classic');
@@ -245,19 +229,6 @@ export default function App() {
   const [showProps, setShowProps] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  const updateDecoColor = (color: string | null) => {
-    setSelectedDecoColor(color);
-  };
-
-  const confirmDecoColor = (color: string | null) => {
-    if (color) {
-      setDecoColorHistory(prev => {
-        if (prev[0] === color) return prev; // Avoid unnecessary updates if already at the top
-        const next = [color, ...prev.filter(c => c !== color)];
-        return next.slice(0, 20); // Keep last 20
-      });
-    }
-  };
   const deleteElement = (id: string) => {
     if (BASE_ELEMENTS.some(e => e.id === id)) {
       if (!window.confirm("This is a base element. Are you sure you want to delete it? It might break existing simulations.")) return;
@@ -265,14 +236,6 @@ export default function App() {
     setElements(prev => prev.filter(e => e.id !== id));
     if (selectedElement === id) setSelectedElement('empty');
   };
-
-  useEffect(() => {
-    if (selectedElement === 'empty') {
-      setBrushOverwrite(true);
-    } else {
-      setBrushOverwrite(false);
-    }
-  }, [selectedElement]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -550,9 +513,8 @@ export default function App() {
     if (!canvasRef.current || !engineRef.current) return;
 
     if (e.type === 'pointerdown') {
-      // Panning: Middle click, Ctrl+Click or Shift+Click ONLY if not in deco mode
-      const isPanningRequest = e.buttons === 4 || (e.buttons === 1 && e.ctrlKey) || (e.shiftKey && activeSidebarTab !== 'deco');
-      if (isPanningRequest) {
+      // Middle click (4) or Ctrl+Left click (1 + ctrlKey) for Panning
+      if (e.buttons === 4 || (e.buttons === 1 && e.ctrlKey) || e.shiftKey) {
         setIsPanning(true);
         return;
       }
@@ -1009,103 +971,36 @@ export default function App() {
                 )}
                 {activeSidebarTab === 'deco' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                       <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Pintura</h3>
-                       <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 rounded border border-white/20" style={{ backgroundColor: selectedDecoColor || 'transparent' }} />
-                          <span className="text-[9px] font-mono text-white/40 uppercase">{selectedDecoColor || 'Borracha'}</span>
-                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-5 gap-1.5 p-2 bg-white/5 rounded-lg border border-white/5">
-                      <button 
-                        onClick={() => setSelectedDecoColor(null)}
-                        className={cn(
-                          "aspect-square rounded border transition-all flex items-center justify-center bg-white/5",
-                          selectedDecoColor === null ? "border-white scale-110 shadow-lg z-10" : "border-white/10 hover:border-white/30"
-                        )}
-                        title="Borracha de Pintura"
-                      >
-                        <Eraser size={14} className={selectedDecoColor === null ? "text-white" : "text-white/20"} />
-                      </button>
-                      {decoColorHistory.map(c => (
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#8b4513', '#808080'].map(c => (
                         <button 
                           key={c} 
-                          onClick={() => {
-                            setSelectedDecoColor(c);
-                            confirmDecoColor(c);
-                          }} 
+                          onClick={() => setSelectedDecoColor(c)} 
                           className={cn(
                             "aspect-square rounded border transition-all",
-                            selectedDecoColor === c ? "border-white scale-110 shadow-lg z-10" : "border-white/10 hover:border-white/30"
+                            selectedDecoColor === c ? "border-white scale-110 shadow-lg" : "border-white/10"
                           )} 
                           style={{ backgroundColor: c }} 
-                          title={c}
                         />
                       ))}
-                    </div>
-
-                    <div className="p-4 bg-white/5 rounded-xl border border-white/10 flex flex-col items-center gap-4">
-                      <div className="color-picker-wrapper w-full">
-                        <HexColorPicker 
-                          color={selectedDecoColor || "#ffffff"} 
-                          onChange={updateDecoColor} 
-                          style={{ width: '100%', height: '160px' }}
+                      <div className="aspect-square rounded border border-white/10 relative overflow-hidden flex items-center justify-center bg-white/5">
+                        <Plus size={12} className="text-white/20 pointer-events-none" />
+                        <input 
+                          type="color" 
+                          value={selectedDecoColor}
+                          onChange={(e) => setSelectedDecoColor(e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                         />
                       </div>
-                      <div className="flex w-full gap-2">
-                        <div 
-                          className="flex-1 h-10 rounded-lg border border-white/10 flex items-center justify-center text-[10px] font-mono font-bold uppercase tracking-widest bg-black/40"
-                          style={{ color: selectedDecoColor || '#ffffff', textShadow: '0 0 10px currentColor' }}
-                        >
-                          {selectedDecoColor || '#FFFFFF'}
-                        </div>
-                        <button 
-                          onClick={() => confirmDecoColor(selectedDecoColor)}
-                          className="px-4 h-10 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
-                        >
-                          <Plus size={14} />
-                          OK
-                        </button>
-                        <div className="relative group">
-                          <button className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/40 group-hover:text-white transition-colors">
-                            <Plus size={16} />
-                          </button>
-                          <input 
-                            type="color" 
-                            value={selectedDecoColor || '#ffffff'} 
-                            onChange={(e) => updateDecoColor(e.target.value)}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                          />
-                        </div>
-                      </div>
                     </div>
-
-                    <div className="pt-2 border-t border-white/5 space-y-2">
-                      <button 
-                        onClick={() => {
-                           if (engineRef.current) {
-                             engineRef.current.showDecoration = !engineRef.current.showDecoration;
-                             // Force a re-render to show active state if needed, though engine handles it
-                           }
-                        }}
-                        className="w-full py-2 bg-blue-600/10 text-blue-400 text-[10px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/20 flex items-center justify-center gap-2 transition-all"
-                      >
-                        <Eye size={14} /> Ver / Esconder Pintura
-                      </button>
-                      
-                       <button 
-                        onClick={() => {
-                          if (engineRef.current && window.confirm("Limpar toda a pintura?")) {
-                            engineRef.current.decoGrid.fill(0);
-                            saveToHistory();
-                          }
-                        }}
-                        className="w-full py-1.5 text-white/20 hover:text-red-400 text-[8px] font-bold uppercase flex items-center justify-center gap-1.5 transition-all"
-                      >
-                        <Trash2 size={10} /> Resetar Camada
-                      </button>
-                    </div>
+                    <button 
+                      onClick={() => {
+                        if (engineRef.current) engineRef.current.decoGrid.fill(0);
+                      }}
+                      className="w-full py-1.5 bg-red-600/10 text-red-400 text-[10px] font-bold uppercase rounded border border-red-500/20 hover:bg-red-500/20 flex items-center justify-center gap-1"
+                    >
+                      <Eraser size={12} /> Clear Deck
+                    </button>
                   </div>
                 )}
               </div>
@@ -1177,48 +1072,6 @@ export default function App() {
                           </button>
                         ))}
                       </div>
-                    </section>
-
-                    <section className="pt-4 border-t border-white/5 space-y-4">
-                       <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Visual Modes</h3>
-                       <div className="grid grid-cols-2 gap-1.5">
-                          <button 
-                            onClick={() => setViewMode(ViewMode.NORMAL)} 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.NORMAL ? "bg-white text-black border-white" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Eye size={12} /> Normal
-                          </button>
-                          <button 
-                            onClick={() => setViewMode(ViewMode.HEAT)} 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.HEAT ? "bg-orange-600/20 text-orange-400 border-orange-500/20" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Flame size={12} /> Heat
-                          </button>
-                          <button 
-                            onClick={() => setViewMode(ViewMode.PRESSURE)} 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.PRESSURE ? "bg-blue-600/20 text-blue-400 border-blue-500/20" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Waves size={12} /> Pressure
-                          </button>
-                          <button 
-                            onClick={() => setViewMode(ViewMode.LIFE) } 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.LIFE ? "bg-green-600/20 text-green-400 border-green-500/20" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Heart size={12} /> Life
-                          </button>
-                       </div>
                     </section>
 
                     <section className="pt-4 border-t border-white/5 space-y-4">
@@ -1412,48 +1265,6 @@ export default function App() {
                         ))}
                       </div>
                     </section>
-                    
-                    <section className="pt-4 border-t border-white/5 space-y-4">
-                       <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Visual Modes</h3>
-                       <div className="grid grid-cols-2 gap-1.5">
-                          <button 
-                            onClick={() => setViewMode(ViewMode.NORMAL)} 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.NORMAL ? "bg-white text-black border-white" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Eye size={12} /> Normal
-                          </button>
-                          <button 
-                            onClick={() => setViewMode(ViewMode.HEAT)} 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.HEAT ? "bg-orange-600/20 text-orange-400 border-orange-500/20" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Flame size={12} /> Heat
-                          </button>
-                          <button 
-                            onClick={() => setViewMode(ViewMode.PRESSURE)} 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.PRESSURE ? "bg-blue-600/20 text-blue-400 border-blue-500/20" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Waves size={12} /> Pressure
-                          </button>
-                          <button 
-                            onClick={() => setViewMode(ViewMode.LIFE) } 
-                            className={cn(
-                              "py-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all flex flex-col items-center gap-1",
-                              viewMode === ViewMode.LIFE ? "bg-green-600/20 text-green-400 border-green-500/20" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                            )}
-                          >
-                            <Heart size={12} /> Life
-                          </button>
-                       </div>
-                    </section>
 
                     <section className="pt-4 border-t border-white/5 space-y-4">
                        <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Brush</h3>
@@ -1527,7 +1338,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Bottom Drawer - Elements or Colors */}
+            {/* Bottom Drawer - Elements */}
             <div 
               onMouseEnter={() => setIsBottomBarHovered(true)} 
               onMouseLeave={() => setIsBottomBarHovered(false)}
@@ -1536,101 +1347,30 @@ export default function App() {
                 !isBottomBarHovered && !isSidebarHovered && "opacity-40 grayscale"
               )}
             >
-              {selectedCategory === 'paint' ? (
-                <>
-                  <div className="flex items-center gap-2 pr-4 border-r border-white/10 mr-2 shrink-0">
-                    <Palette size={16} className="text-pink-500" />
-                    <span className="text-[10px] font-bold uppercase text-white/40 tracking-wider">Paleta</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide px-1">
-                    <button
-                      onClick={() => setSelectedDecoColor(null)}
-                      className={cn(
-                        "w-8 h-8 rounded border transition-all shrink-0 flex items-center justify-center bg-white/5",
-                        selectedDecoColor === null ? "border-white scale-110 shadow-lg z-10" : "border-white/10 hover:border-white/30"
-                      )}
-                      title="Borracha"
-                    >
-                      <Eraser size={12} className={selectedDecoColor === null ? "text-white" : "text-white/20"} />
-                    </button>
-                    <div className="h-10 flex items-center px-2 bg-white/5 rounded-lg border border-white/10 gap-2">
-                       <div className="overflow-hidden rounded-sm">
-                          <HexColorPicker 
-                            color={selectedDecoColor || "#ffffff"} 
-                            onChange={updateDecoColor}
-                            style={{ width: '80px', height: '32px' }}
-                          />
-                       </div>
-                       <div className="w-[1px] h-4 bg-white/10" />
-                       <span className="text-[10px] font-mono text-white/40 min-w-[50px] uppercase truncate">{selectedDecoColor || 'Apagar'}</span>
-                       <button 
-                         onClick={() => confirmDecoColor(selectedDecoColor)}
-                         className="h-8 px-2 bg-blue-600 rounded text-[9px] font-bold uppercase text-white hover:bg-blue-500 transition-colors flex items-center gap-1"
-                       >
-                         <Plus size={10} />
-                         OK
-                       </button>
-                    </div>
-                    {decoColorHistory.slice(0, 8).map(c => (
-                      <button
-                        key={c}
-                        onClick={() => {
-                          setSelectedDecoColor(c);
-                          confirmDecoColor(c);
-                        }}
-                        className={cn(
-                          "w-8 h-8 rounded border transition-all shrink-0",
-                          selectedDecoColor === c ? "border-white scale-110 shadow-lg z-10" : "border-white/10 hover:border-white/30"
-                        )}
-                        style={{ backgroundColor: c }}
-                        title={c}
-                      />
-                    ))}
-                    <div className="w-8 h-8 rounded border border-white/10 relative overflow-hidden flex items-center justify-center bg-white/5 shrink-0 hover:bg-white/10 transition-colors">
-                      <Plus size={12} className="text-white/20 pointer-events-none" />
-                      <input 
-                        type="color" 
-                        value={selectedDecoColor || '#ffffff'}
-                        onChange={(e) => updateDecoColor(e.target.value)}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="ml-auto flex gap-2 pl-4 border-l border-white/10">
-                     <button 
-                       onClick={() => { if(engineRef.current) engineRef.current.showDecoration = !engineRef.current.showDecoration; }}
-                       className="px-3 h-8 bg-blue-600/10 text-blue-400 text-[9px] font-bold uppercase rounded border border-blue-500/20 hover:bg-blue-600/20 flex items-center gap-1.5 transition-colors"
-                     >
-                       <Eye size={12} /> Ver Pintura
-                     </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {elements.filter(el => el.category === selectedCategory).map(el => (
-                    <button
-                      key={el.id}
-                      onClick={() => setSelectedElement(el.id)}
-                      className={cn(
-                        "px-3 h-10 rounded text-[9px] font-bold uppercase tracking-widest border transition-all flex flex-col items-center justify-center min-w-[70px] shrink-0",
-                        selectedElement === el.id ? "bg-white text-black border-white" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
-                      )}
-                    >
-                      <span className="truncate w-full text-center">{el.name}</span>
-                      <div className="w-full h-1 mt-1 rounded-full opacity-50" style={{ backgroundColor: el.color }} />
-                    </button>
-                  ))}
-                  <button 
-                    onClick={() => {
-                      setEditingElement({ category: selectedCategory } as any);
-                      setIsEditorOpen(true);
-                    }} 
-                    className="w-10 h-10 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 hover:text-white shrink-0"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </>
-              )}
+              {elements.filter(el => {
+                return el.category === selectedCategory;
+              }).map(el => (
+                <button
+                  key={el.id}
+                  onClick={() => setSelectedElement(el.id)}
+                  className={cn(
+                    "px-3 h-10 rounded text-[9px] font-bold uppercase tracking-widest border transition-all flex flex-col items-center justify-center min-w-[70px] shrink-0",
+                    selectedElement === el.id ? "bg-white text-black border-white" : "bg-white/5 text-white/40 border-white/5 hover:bg-white/10"
+                  )}
+                >
+                  <span className="truncate w-full text-center">{el.name}</span>
+                  <div className="w-full h-1 mt-1 rounded-full opacity-50" style={{ backgroundColor: el.color }} />
+                </button>
+              ))}
+              <button 
+                onClick={() => {
+                  setEditingElement({ category: selectedCategory } as any);
+                  setIsEditorOpen(true);
+                }} 
+                className="w-10 h-10 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 hover:text-white shrink-0"
+              >
+                <Plus size={16} />
+              </button>
             </div>
 
             {/* HUD Overlays */}
