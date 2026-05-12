@@ -252,6 +252,7 @@ export default function App() {
   const confirmDecoColor = (color: string | null) => {
     if (color) {
       setDecoColorHistory(prev => {
+        if (prev[0] === color) return prev; // Avoid unnecessary updates if already at the top
         const next = [color, ...prev.filter(c => c !== color)];
         return next.slice(0, 20); // Keep last 20
       });
@@ -1061,8 +1062,9 @@ export default function App() {
                         </div>
                         <button 
                           onClick={() => confirmDecoColor(selectedDecoColor)}
-                          className="px-4 h-10 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                          className="px-4 h-10 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
                         >
+                          <Plus size={14} />
                           OK
                         </button>
                         <div className="relative group">
